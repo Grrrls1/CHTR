@@ -1,0 +1,65 @@
+{
+  "moved_at": "2026-10-20T05:22:19.347827+00:00",
+  "projects": [
+    {
+      "name": "StrokeExtraction",
+      "upstream_url": "https://github.com/MengLi-l1/StrokeExtraction.git",
+      "base_commit": "2d273e0eaa1df448aa5354375bb1a0a9c131f66d",
+      "old_path": "/home/lkh/workspace/StrokeExtraction",
+      "path": "third_party/StrokeExtraction",
+      "git_metadata_archive": "/home/lkh/workspace/archive/third_party_git_20261020/StrokeExtraction.git",
+      "source_hashes": {
+        "ReadMe.md": "65a610346a25fd952c2b4da5cc452842ba8089ec5bedc5d84c4ee6b2b4e97a5d",
+        "char_recognise/model.py": "aad597ace9befa7519f3c3fd46eae9306222d222488accf3bbd50cfbbdfb58f0",
+        "content_net_model/model_of_contentNet.py": "b1546e8fce48a4cc2f18d6f46be6baff89555c1612fa418a6ce572840edcb19c",
+        "dataset/Introduction of RHSEDB.md": "afd195c85210024480aa70bfdcc4987ad1fc58c9c806ab59d28f5acc2d298eb9",
+        "extraction_stroke_application_for_single_character_.py": "24f2e3177c4ecf1358b44e5b1c3f7543d0756fb131416c7bc7e0f35398adc5c0",
+        "load_data_for_SDNet.py": "9c271873baee69cdc55966ce95d7d922ead612434a7d0f122e4cd613aecb61c8",
+        "load_data_for_SegNetExtractNet.py": "4ca7d7dbfb8e495d64659a5fc42fb0e5415c3abdbb7e55f82a5a952629acec3e",
+        "main_train.py": "0fbe2a9e444d40a7d031db538a8691093f2b44af5699f1570750544758da7e15",
+        "model/model_of_ExtractNet.py": "52a8eb69ce24d84cfe103bd117fe8d7568ec0c238cd92ca21e372624a3846119",
+        "model/model_of_SDNet.py": "8266297a08c8b8420d8edb052d1bf6efd516c3848ff7e56fd5bd8b6f82e59647",
+        "model/model_of_SegNet.py": "3dd4ac08fa47b1ecd2a861e6b9ad65390efb8cdb3d7b7137618f42a3bc2b27a5",
+        "train_ExtractNet.py": "2666aebd5860657189ae13c8e0075e47e7e9921971eb4445166a3bc558770177",
+        "train_SDNet.py": "8f4f3a0a47bee9bbc32e25547b6151bf840fd7ac39cd583220f90e1baa3f8a96",
+        "train_SegNet.py": "0134decddfd02ec7e79aaba470f91778c891608730764669ce880468c42ec9af",
+        "utils.py": "65f1006bd1b3041a4eb8d99a4142c6d3496359435b54121692ac8bd223985946",
+        "utils_loss_val.py": "b06c21dce9610dcec32809388a03bd0652542d23799989876b2c0c171a0f77f8"
+      }
+    },
+    {
+      "name": "virtual_sketching",
+      "upstream_url": "https://github.com/MarkMoHR/virtual_sketching.git",
+      "base_commit": "41d0fd9db2eb9603ecc314bc1ece72d554271bda",
+      "old_path": "/home/lkh/workspace/virtual_sketching",
+      "path": "third_party/virtual_sketching",
+      "git_metadata_archive": "/home/lkh/workspace/archive/third_party_git_20261020/virtual_sketching.git",
+      "source_hashes": {
+        "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+        "README.md": "0306b09734e449d3d75fa3c4f0cf66ab3081a2a19451c205ea30c224339157b5",
+        "README_CN.md": "b19e9804c463e74da374959a72cb2da0295a41cc1cd9dedbd26becaed6ea6315",
+        "WINDOWS_INSTALL_GUIDE.md": "052c20ce7fd372aa13896e3039d772e79c5c933a1c05b95d464a977240beb9cb",
+        "dataset_utils.py": "26279d33751bb70222b7e6d6f01639fd79cb57a8f30c3fbfaa228704675da65c",
+        "hyper_parameters.py": "a1583067921d7d70922b36d5cfe1d0176506c1289fc3c9730ec7f8129e83ece8",
+        "model_common_test.py": "b05147f9f94eaf6376c9f61d8908246b9fff2ede6427d02193b549659885dfc9",
+        "model_common_train.py": "02c80019f704f1de6e210e451a2299c5296a444f8e279304998bb1d9c32787cc",
+        "rasterization_utils/NeuralRenderer.py": "be1e2720e397bbdd6abd6dc52f79ee24d5c8e2f72820e5a78dd585e97f8e4639",
+        "rasterization_utils/RealRenderer.py": "e3949978d1746dfc47dd8387f8b3bd31c72a1e6e0502d2adbc8965afadf75379",
+        "rnn.py": "718a4d08d59f78cb089cf7a89d2117899e6e06032278d220d4ce953d2de9fac0",
+        "subnet_tf_utils.py": "1cf001f6ae7bbda3940ed5bdc799b45478f73bfa810032859d0bd83513f0cd00",
+        "test_photograph_to_line.py": "2c49b6f8d6441fe96bfe2b788a43910ba98c18359ea358aaadd76a92fd16621b",
+        "test_rough_sketch_simplification.py": "c057a6f3c6ccd74277b1c11ca1b77a1246c1f45f7892c6acabd0195cf5c3eff6",
+        "test_vectorization.py": "e23e90a6cd96155d9126b7ad147438af3f374b15c929be48be0d73150ab1d620",
+        "tools/gif_making.py": "7f0a6a72ae54c242799b4a2201642c036978cb4c2cee4ca5b3200e617eed3c1c",
+        "tools/svg_conversion.py": "21aef437d47ea498a7f0fe67b3fc7f99c4f5d50db4f06dd094803b43396278b3",
+        "tools/visualize_drawing.py": "3633e3d1e5af7dcb3a7859705ab2bcfaa81d52c3f14da070e6c038f86befce79",
+        "train_rough_photograph.py": "6e12865a846601b2240764f9b86793c1f88bc78f2d9d2237552c91289ff153c3",
+        "train_vectorization.py": "4f5d630d5f88ecac204865323e0ae23822938aedb77a6eb319602a41a3087170",
+        "utils.py": "10e49f61b57feed150f022ca2b0f551ba11d7c95f05986f0e84b207f2c02c07b",
+        "vgg_utils/VGG16.py": "e25bbd6f76aa07358040673d562e4b38e0aed3f4d5b370e1b45a8b26f05d323b",
+        "virtual_sketch_gui.py": "cb22156051a8fc989b98ca11fd716ad1cb1bb735ec947c598e157dd94e698dd8"
+      }
+    }
+  ],
+  "scope": "Whole directories moved, no runtime assets deleted; root aliases retained for historical absolute paths"
+}

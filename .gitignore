@@ -1,0 +1,37 @@
+# Local environments and tools
+**/__pycache__/
+*.py[cod]
+**/.venv/
+.venvs/
+**/.tools/
+**/.uv-cache/
+**/.python/
+**/.cache/
+**/.idea/
+# Generated data and experiment artifacts
+/data/*/
+/reproduction/pipeline_runs/
+/reproduction/vs_inputs/
+**/runs/
+**/out/
+**/output/
+**/outputs/
+**/results/
+**/dist/
+/third_party/StrokeExtraction/dataset/*/
+/third_party/StrokeExtraction/dataset_forSegNet*/
+/third_party/StrokeExtraction/char_recognise/out_vgg_bn/
+/third_party/StrokeExtraction/content_net_model/out/
+*.pt
+*.pth
+*.th
+*.ckpt*
+*.mdb
+*.npz
+*.npy
+*.zip
+*.tar.gz
+*.log
+.env
+.env.*
+.DS_Store

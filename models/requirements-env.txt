@@ -1,0 +1,5 @@
+# Reproducible non-PyTorch dependencies for scripts/create_env.sh.
+# torch/torchvision are installed from the selected official CPU/CUDA index.
+numpy==1.26.4
+opencv-python-headless==4.10.0.84
+lmdb==1.5.1

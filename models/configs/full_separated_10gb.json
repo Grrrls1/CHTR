@@ -1,0 +1,54 @@
+{
+  "dataset": "/home/lkh/workspace/CHTR/data/chtr_mmah_lmdb",
+  "output_dir": "/home/lkh/workspace/CHTR/models/runs/full_separated_10gb",
+  "seed": 42,
+  "device": "cuda:0",
+  "threads": 4,
+  "batch_size": 48,
+  "num_workers": 2,
+  "epochs": 100,
+  "max_steps": 0,
+  "learning_rate": 0.0003,
+  "weight_decay": 0.0,
+  "grad_clip": 1.0,
+  "augment": false,
+  "min_trajectory_iou": null,
+  "min_mask_iou": null,
+  "mask_iou_stage": "mask_cleanup_whole",
+  "condition_mode": "predicted",
+  "model": {
+    "backbone": "cnn",
+    "pretrained": false,
+    "dim": 64,
+    "heads": 4,
+    "stroke_layers": 2,
+    "point_layers": 2,
+    "dropout": 0.0,
+    "max_strokes": 64,
+    "max_points": 1024,
+    "memory_size": 8,
+    "mask_alpha": 1.0,
+    "separate_branches": true
+  },
+  "loss_weights": {
+    "xy": 1.0,
+    "start": 2.0,
+    "delta": 0.25
+  },
+  "state_weights": [
+    1.0,
+    5.0,
+    10.0
+  ],
+  "checkpoint_every": 100,
+  "geometry_loss": {
+    "type": "pixel_charbonnier",
+    "epsilon_px": 0.5,
+    "scale_px": 10.0
+  },
+  "early_stopping": {
+    "patience": 10,
+    "min_delta": 0.001,
+    "min_epochs": 20
+  }
+}

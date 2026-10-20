@@ -1,0 +1,33 @@
+Built-in image_gen generation prompt
+
+Create a NEW simplified, technically exact CHTR model architecture infographic. White background, landscape, academic flat blocks, Chinese text clear, blue/green/purple. Use fewer blocks to eliminate wiring ambiguity. Title "CHTR：书法图像到书写轨迹". Diagram MUST obey the following 13 connections exactly, and no additional solid connections:
+A "输入图像 [B,1,256,256]" -> B "CNN / ResNet-18 + FPN".
+B -> C "多尺度视觉特征".
+C -> D "有序笔画 Transformer".
+C -> E "高分辨率像素特征".
+C -> J "逐点轨迹 Transformer".
+D -> F "当前笔画特征 z_k".
+F -> G "笔画掩码头"; E -> G.
+F -> H "24 类笔画分类与软嵌入".
+F -> I "条件融合"; H -> I.
+I -> J.
+G -> J. This arrow has label "预测掩码：软注意力引导".
+J -> K "几何头 x, y, width + 三分类状态头".
+K -> L "points [T,6]".
+Actually there are 16 edges listed; implement only the listed edges. Place A B C along left, D then F in center, branch G above and H below, I between F/H and J. J then K then L on right. E near G. Keep G->J routed entering J, NEVER entering K. H outputs only to I, NEVER directly to J. Use arrows with arrowheads directly at target boundaries. Visible boxes G and H should show example mask and class probabilities as small embedded visual icons, no separate unlabeled output node.
+Small external purple box "笔画 BOS / 历史特征 + 序号" -> D.
+Small external purple box "点 BOS / 历史点" -> J. Tiny note below "训练：真实上一点；推理：预测上一点".
+F -> one auxiliary box "辅助头：最后一笔 / 起终点". This auxiliary box has NO outgoing arrows.
+At bottom separated strip "训练监督" with three independent rows: "真实 mask + 预测 mask → BCE + Dice"; "真实类别 + 预测类别 → CE"; "真实轨迹 + 预测轨迹 → 坐标 / 宽度 / 状态 / 位移损失".
+Bottom right independent gray dashed box "待实现：自由解码控制器、可微重绘". No outgoing/incoming arrows for this box.
+Below output L print exactly "[x, y, width, continue, stroke_end, drawing_end]"; line break allowed. Footer "一笔一条路径；offsets 由结束状态派生，无独立预测头". Footer small "最小配置：D=64，4 heads，笔画 2 层，点 2 层".
+Avoid dense tensor shapes, long crossing cables, spaghetti, extra connections. Accurate topology takes precedence over embellishment.
+
+Final targeted editing prompt
+
+Precisely edit only three cables in this image. Preserve all boxes and text.
+Current error: the lower-left green box 高分辨率像素特征 has a cable from its right edge that goes right, up, right, then ENTERS 条件融合. REMOVE this cable completely. Pixel features must NEVER enter 条件融合.
+Current error: the blue 当前笔画特征 z_k has TWO separate cables entering green 笔画掩码头. Keep the UPPER cable entering mask head. REMOVE the LOWER duplicate cable (the one beginning at the bottom-right edge of z_k). Instead connect the bottom-right edge of z_k directly down-right to the LEFT edge of 条件融合. It should clearly be a direct z_k -> 条件融合 arrow.
+Add a new pixel-feature -> mask-head arrow by routing from the LEFT edge of 高分辨率像素特征 upward in the white gap between the green 多尺度视觉特征 and the purple 有序笔画 Transformer, then across the white top margin ABOVE the auxiliary-head box, then down to the TOP boundary of 笔画掩码头. Make this cable TEAL to distinguish it; put small label 'pixel features' at its top horizontal segment. Source is the lower-left high-resolution green feature block; target is the upper-right mask-head block, no other endpoints.
+The final 条件融合 box must have exactly two inputs: z_k from upper-left and class embedding from below. The final mask-head box must have exactly two inputs: z_k from left and pixel features from top. Remove any leftover fragments from deleted cables. Keep the already correct direct blue cable 多尺度视觉特征 -> 逐点轨迹 Transformer. Keep all other content unchanged.
+

@@ -1,0 +1,5 @@
+torch>=1.13
+numpy>=1.20
+opencv-python>=4.5
+lmdb>=1.3
+# torchvision is only required for the optional resnet18 backbone.

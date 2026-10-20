@@ -1,0 +1,29 @@
+[
+  {
+    "name": "CHTR",
+    "path": "/home/lkh/workspace/CHTR",
+    "remote": "https://github.com/RittoQin/CHTR.git",
+    "commit": "98e6b16756dc61d70e2c3e6c9c6097b206b1eb70"
+  },
+  {
+    "name": "StrokeExtraction",
+    "path": "/home/lkh/workspace/CHTR/third_party/StrokeExtraction",
+    "remote": "https://github.com/MengLi-l1/StrokeExtraction.git",
+    "commit": "2d273e0eaa1df448aa5354375bb1a0a9c131f66d",
+    "vendored": true
+  },
+  {
+    "name": "virtual_sketching",
+    "path": "/home/lkh/workspace/CHTR/third_party/virtual_sketching",
+    "remote": "https://github.com/MarkMoHR/virtual_sketching.git",
+    "commit": "41d0fd9db2eb9603ecc314bc1ece72d554271bda",
+    "vendored": true
+  },
+  {
+    "name": "CalliRewrite",
+    "path": null,
+    "remote": "https://github.com/LoYuXr/CalliRewrite.git",
+    "commit": "261b1cbc0c8c9756d15c84843c19e6cbf6c45e06",
+    "present": false
+  }
+]

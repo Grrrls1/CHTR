@@ -1,0 +1,38 @@
+{
+  "dataset": "/home/lkh/workspace/CHTR/data/chtr_mmah_lmdb",
+  "output_dir": "/home/lkh/workspace/CHTR/models/runs/chtr_mmah",
+  "seed": 42,
+  "device": "cuda:0",
+  "threads": 4,
+  "batch_size": 2,
+  "num_workers": 0,
+  "epochs": 10,
+  "max_steps": 0,
+  "learning_rate": 0.0003,
+  "weight_decay": 0.01,
+  "grad_clip": 1.0,
+  "augment": false,
+  "min_trajectory_iou": null,
+  "min_mask_iou": null,
+  "mask_iou_stage": "mask_cleanup_whole",
+  "condition_mode": "predicted",
+  "model": {
+    "backbone": "cnn",
+    "pretrained": false,
+    "dim": 64,
+    "heads": 4,
+    "stroke_layers": 2,
+    "point_layers": 2,
+    "dropout": 0.1,
+    "max_strokes": 64,
+    "max_points": 1024,
+    "memory_size": 8,
+    "mask_alpha": 1.0
+  },
+  "loss_weights": {},
+  "state_weights": [
+    1.0,
+    5.0,
+    10.0
+  ]
+}

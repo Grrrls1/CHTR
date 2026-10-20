@@ -1,0 +1,191 @@
+{
+  "status": "completed",
+  "retain": [
+    "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/calligraphy_full_gpu0_20261013_134511_2134141",
+    "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_reference_bank_20260918",
+    "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/dataset_simplified_dataloader_v2/stroke_type_map.json"
+  ],
+  "audited_inputs": [
+    "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/calligraphy_full_gpu0_20261013_134511_2134141/run_config.json",
+    "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/calligraphy_full_gpu0_20261013_134511_2134141/selected/references.jsonl",
+    "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/calligraphy_full_gpu0_20261013_134511_2134141/skeleton_continuation_v1/config.json",
+    "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/calligraphy_full_gpu0_20261013_134511_2134141/skeleton_all_clean_v1/config.json",
+    "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_reference_bank_20260918/summary.json"
+  ],
+  "reference_counts": {
+    "mmah_reference_bank_20260918": 6356,
+    "calligraphy_full_gpu0_20261013_134511_2134141": 5,
+    "mmah_single_path_gpu2_20261005_five": 1
+  },
+  "delete": [
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/1613_20260915",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/ccse_flow_chi_18362_20260918",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/ccse_flow_yong_15577_20260918",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/ccse_target_completeness_example_yi.png",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/ccse_vs_strokeextraction_20260918",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/chi_20260917_gpu1",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/extraction_stage_diagnosis_20260918",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_bank_yong_chi_gpu3_20260921",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_finetuned_eval_gpu3_20260922",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/vs_inputs_v1b",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/dataset_simplified_iou087_v2",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/extracted_gpu2",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/dataset_simplified_iou087_v1",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/dataset_simplified_dataloader_v1",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/vs_inputs_v1",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/lmdb_iou087_v1b",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/example_dataset_iou087_v2",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/example_dataset_iou087_all_v1",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/single_path_skeleton_char_v1",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/mask_cleanup_v3_constrained",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/example_dataset_iou080_v1",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/single_path_skeleton_centerline_v1",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/single_path_skeleton_v1",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/selected_5",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/example_dataset_iou080_v1b",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/example_dataset_iou087_v1",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/example_dataset_iou080_v1c",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/dataset_simplified_dataloader_v2/summary.json",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/dataset_simplified_dataloader_v2/manifest.jsonl",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/dataset_simplified_dataloader_v2/samples",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/dataset_simplified_dataloader_v2/README.md",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_stroke_label_proposals_20260918",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_stroke_label_proposals_20260918_v2",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_stroke_label_proposals_collapsed_20260918",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/rhsedb_2716_reference_target_comparison.png",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/rhsedb_6d_10_20260917",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/rhsedb_reference_bank_20260917",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/rhsedb_yong_4208_20260917",
+      "deleted": true
+    },
+    {
+      "path": "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/yong_20260917_gpu1",
+      "deleted": true
+    }
+  ],
+  "protected_hashes": {
+    "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/calligraphy_full_gpu0_20261013_134511_2134141/run_config.json": "4f73f4e50ad8b6b25e473cd42abe4d92db021c921ba3253bc8376297476c40fe",
+    "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/calligraphy_full_gpu0_20261013_134511_2134141/skeleton_all_clean_v1/summary.json": "336484754da6565186ec4fecb8496d5078eae978bcb8102afb486990d4b33bb1",
+    "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_reference_bank_20260918/manifest.jsonl": "cd7dfc45ac796de188f4da5aa2559bc94dbd2a130dd8bb5b1cf68b44921e7389",
+    "/home/lkh/workspace/CHTR/reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/dataset_simplified_dataloader_v2/stroke_type_map.json": "6e8eba9cd3d0e1a800be6597fe8d04f0845771ab9fa27155241b67a14abfbabc"
+  },
+  "started_at": "2026-10-20T05:17:18.898380+00:00",
+  "finished_at": "2026-10-20T05:17:46.615400+00:00",
+  "remaining_top_level": [
+    "calligraphy_full_gpu0_20261013_134511_2134141",
+    "mmah_reference_bank_20260918",
+    "mmah_single_path_gpu2_20261005_five"
+  ]
+}

@@ -1,0 +1,28 @@
+[project]
+name = "stroke-extraction"
+version = "0.1.0"
+description = "RTX 5090 training environment for StrokeExtraction"
+requires-python = ">=3.10,<3.11"
+dependencies = [
+  "torch==2.12.1",
+  "torchvision==0.27.1",
+  "numpy==1.23.5",
+  "opencv-python-headless==3.4.18.65",
+  "scipy==1.9.3",
+  "pandas==1.5.3",
+  "matplotlib==3.5.3",
+  "Pillow==9.5.0",
+]
+
+[tool.uv]
+package = false
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu130" }
+torchvision = { index = "pytorch-cu130" }
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true

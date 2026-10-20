@@ -1,0 +1,1 @@
+{"sample_id":"1613","character":"迟","source":"RHSEDB","image_path":"../../../third_party/StrokeExtraction/results/1613/input_target.png","extracted_path":"../../../third_party/StrokeExtraction/results/1613/all_stages.npz","expected_strokes":7,"category_system":"StrokeExtraction-24","review_status":"pending"}
