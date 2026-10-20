@@ -36,7 +36,9 @@ mask 默认使用 `mask_cleanup_whole`，也可用 `--mask-iou-stage mask_extrac
 
 训练采用 teacher forcing：点历史来自真实标签，`condition_mode=predicted` 使用预测的 mask 和类别。
 `model.separate_branches=true` 时，视觉和逐点参数组分别接受各自监督并分别裁剪梯度。
-默认几何损失采用像素尺度 Charbonnier，另含首点与笔内位移监督；其他损失包含宽度、
+XY 与宽度损失均采用像素尺度 Charbonnier，共用 `geometry_loss.epsilon_px` 和
+`scale_px`，按有效点先在笔内平均，再对笔画平均。宽度按图像尺寸还原为像素直径，
+默认权重为 1；另含首点与笔内位移监督。其他损失包含
 点状态、mask BCE/Dice、类别、最后一笔和辅助起终点。
 可微重绘损失与自喂历史 rollout 训练尚未实现。
 
@@ -118,3 +120,6 @@ scripts/         训练、评估、可视化和环境工具
 visualization/   笔画类别与 mask 展示
 tests/           模型与数据行为测试源码
 ```
+
+宽度损失尺度变更后，从旧 checkpoint 训练应使用 `--init-weights` 和新的输出目录；
+旧损失版本的 `--resume` 会被兼容检查拒绝。不配置 `geometry_loss` 时仍保留原归一化 Smooth L1。

@@ -27,6 +27,28 @@ class PixelGeometryTests(unittest.TestCase):
         self.assertTrue(torch.isfinite(pred.grad).all());self.assertGreater(float(pred.grad[0,0,0]),0)
         self.assertEqual(float(pred.grad[0,2:].abs().sum()),0.)
 
+    def test_width_pixel_scale_balancing_padding_and_gradient(self):
+        for size in (101, 256):
+            pred=torch.zeros(2,4,3,requires_grad=True)
+            target=torch.zeros(2,4,6)
+            valid=torch.tensor([[1,1,0,0],[1,1,1,1]],dtype=torch.bool)
+            with torch.no_grad():
+                pred[0,0,2]=10/size
+                pred[0,2:,2]=1000
+                pred[1,:,2]=20/size
+                pred[0,0,0]=10/(size-1)
+                pred[1,:,0]=20/(size-1)
+            result=geometry_losses(pred,target,valid,(1,1,size,size),CONFIG)
+            rho10=(math.sqrt(100+.25)-.5)/10
+            rho20=(math.sqrt(400+.25)-.5)/10
+            self.assertAlmostEqual(float(result['width']),(rho10/2+rho20)/2,places=6)
+            torch.testing.assert_close(result['width'],result['xy'])
+            result['width'].backward()
+            self.assertTrue(torch.isfinite(pred.grad).all())
+            self.assertGreater(float(pred.grad[0,0,2]),0)
+            self.assertEqual(float(pred.grad[0,2:].abs().sum()),0.)
+            self.assertEqual(float(pred.grad[...,:2].abs().sum()),0.)
+
     def test_padding_and_single_point_strokes(self):
         target=torch.zeros(1,4,6);pred=torch.zeros(1,4,3,requires_grad=True)
         valid=torch.tensor([[1,0,0,0]],dtype=torch.bool)
@@ -65,11 +87,15 @@ class PixelGeometryTests(unittest.TestCase):
                  last_logits=torch.zeros(1,1),endpoints=torch.zeros(1,1,4),mask_logits=torch.zeros(1,1,4,4))
         legacy,old=multitask_loss(out,batch)
         torch.testing.assert_close(old['xy'],F.smooth_l1_loss(geom[...,:2],points[0,...,:2]))
+        torch.testing.assert_close(old['width'],F.smooth_l1_loss(geom[...,2],points[0,...,2]))
         self.assertNotIn('start',old)
         weights=dict(xy=1.,start=2.,delta=.25)
         loss,terms=multitask_loss(out,batch,weights,geometry_config=CONFIG)
         expected=sum(dict(DEFAULT_WEIGHTS,**weights)[k]*v for k,v in terms.items())
         torch.testing.assert_close(loss,expected)
+        direct=geometry_losses(geom,points[0],valid[0],batch['images'].shape,CONFIG)
+        torch.testing.assert_close(terms['width'],direct['width'])
+        self.assertGreater(float(terms['width']),float(old['width']))
         self.assertIn('start',terms);loss.backward();self.assertTrue(torch.isfinite(geom.grad).all())
         metrics=geometry_metrics(geom,points[0],valid[0],batch['images'].shape)
         self.assertAlmostEqual(float(metrics['start_l2_px']),math.sqrt(200),places=5)

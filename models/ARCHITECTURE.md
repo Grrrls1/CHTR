@@ -227,8 +227,8 @@ AI 结构图仅作为 [视觉草稿](figures/model_architecture_draft.png)，其
 
 | 日志名称 | 预测与标签 | 计算方式 | 默认权重 |
 | --- | --- | --- | ---: |
-| `xy` | 预测与真实归一化坐标 | Smooth L1 | 1.0 |
-| `width` | 预测与真实归一化直径 | Smooth L1 | 1.0 |
+| `xy` | 预测与真实像素坐标 | 像素 Charbonnier（未配置 geometry_loss 时为归一化 Smooth L1） | 1.0 |
+| `width` | 预测与真实像素直径 | 与 XY 共用 epsilon_px、scale_px 的 Charbonnier（未配置时为归一化 Smooth L1） | 1.0 |
 | `state` | 点状态 logits 与真实三分类 | 加权交叉熵 | 1.0 |
 | `delta` | 同笔相邻点的预测与真实二维位移 | Smooth L1 | 0.5 |
 | `mask_bce` | mask logits 与真实二值掩码 | BCEWithLogits | 1.0 |
@@ -245,7 +245,7 @@ AI 结构图仅作为 [视觉草稿](figures/model_architecture_draft.png)，其
 L_dice = mean_k(1 - (2 * sum(p_k * m_k) + 1) / (sum(p_k) + sum(m_k) + 1))
 ```
 
-连续量损失对有效元素取均值，分类/辅助损失对有效笔画或点计算。当前逐点损失按有效点平均，点数多的笔画贡献更大；不是每笔先平均再等权相加。
+配置 `geometry_loss.type=pixel_charbonnier` 时，XY、宽度和位移先在笔内对有效点或点对平均，再对有效笔画等权平均；起点按笔画平均。宽度误差乘图像尺寸还原为像素直径，XY 分别乘宽高减一。未配置时保留原归一化 Smooth L1。状态损失仍按有效点计算。
 
 ### 3.2 总损失与监督连接
 

@@ -1,0 +1,50 @@
+{
+  "training_mode": "free_rollout",
+  "dataset": "../data/chtr_mmah_lmdb",
+  "initial_weights": "runs/full_separated_10gb/job_237/last.pt",
+  "output_dir": "runs/free_rollout_full",
+  "device": "cuda:0",
+  "seed": 42,
+  "threads": 2,
+  "epochs": 100,
+  "max_steps": 0,
+  "train_limit": 0,
+  "validation_limit": 32,
+  "gradient_accumulation": 1,
+  "learning_rate": 1e-05,
+  "weight_decay": 0.0,
+  "grad_clip": 1.0,
+  "checkpoint_every": 200,
+  "rollout": {
+    "max_strokes": 64,
+    "max_points": 1024
+  },
+  "alignment_points": 64,
+  "geometry_loss": {
+    "type": "pixel_charbonnier",
+    "epsilon_px": 0.5,
+    "scale_px": 10.0
+  },
+  "state_weights": [
+    1.0,
+    5.0,
+    10.0
+  ],
+  "loss_weights": {
+    "xy": 1.0,
+    "width": 1.0,
+    "start": 2.0,
+    "delta": 0.25,
+    "state": 1.0,
+    "length": 1.0,
+    "missing": 1.0,
+    "extra": 1.0,
+    "mask_bce": 1.0,
+    "mask_dice": 1.0,
+    "type": 0.5,
+    "last": 0.5,
+    "endpoints": 0.5
+  },
+  "eval_every_epochs": 20,
+  "require_full_dataset": true
+}

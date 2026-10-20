@@ -32,6 +32,7 @@
   },
   "loss_weights": {
     "xy": 1.0,
+    "width": 1.0,
     "start": 2.0,
     "delta": 0.25
   },

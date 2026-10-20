@@ -52,11 +52,11 @@
 
 ## P2：损失、日志与训练接入
 
-- [ ] 修复宽度与位置监督的尺度不一致：当前 XY/start/delta 使用像素尺度
-  Charbonnier，而 width 仍对 `width / image_size` 使用 Smooth L1。
+- [x] 修复宽度与位置监督的尺度不一致：width 已与 XY/start/delta 一样使用像素尺度
+  Charbonnier；修改前 width 对 `width / image_size` 使用 Smooth L1。
   epoch100 平均 width loss 为 0.000308，XY 为 0.0943，start 加权后为 1.9675，
   但宽度 MAE 仍为 4.97 px；不能用小 loss 判断宽度已经拟合。
-- [ ] 将宽度误差转为像素直径，采用显式 epsilon/scale 的鲁棒损失，
+- [x] 将宽度误差转为像素直径，采用显式 epsilon/scale 的鲁棒损失，
   对有效点先按笔画归一化再取平均；显式配置 width 权重。
   调参同时检查损失值和共享参数上的梯度贡献，不按损失数值比例直接确定倍率。
 - [ ] 增加逐笔宽度 MAE、均值偏差、笔内标准差、分位数和宽度曲线；

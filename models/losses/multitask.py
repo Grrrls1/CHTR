@@ -18,7 +18,7 @@ def multitask_loss(out, batch, weights=None, state_weights=(1.0, 5.0, 10.0), geo
     pixel_terms = geometry_losses(geom, target, valid, batch['images'].shape, geometry_config) if geometry_config else None
     terms = {
         'xy': pixel_terms['xy'] if pixel_terms is not None else F.smooth_l1_loss(geom[..., :2][valid], target[..., :2][valid]),
-        'width': F.smooth_l1_loss(geom[..., 2][valid], target[..., 2][valid]),
+        'width': pixel_terms['width'] if pixel_terms is not None else F.smooth_l1_loss(geom[..., 2][valid], target[..., 2][valid]),
         'state': F.cross_entropy(out['state_logits'][valid], target[..., 3:][valid].argmax(-1),
                                 weight=geom.new_tensor(state_weights)),
         'type': F.cross_entropy(out['type_logits'][owners, strokes], batch['types'][owners, strokes]),

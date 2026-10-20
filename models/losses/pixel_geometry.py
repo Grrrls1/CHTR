@@ -1,4 +1,4 @@
-"""Stroke-balanced pixel Charbonnier losses for XY, actual starts and displacement."""
+"""Stroke-balanced pixel Charbonnier losses for XY, width, actual starts and displacement."""
 import math
 
 import torch
@@ -33,6 +33,10 @@ def geometry_losses(pred, target, valid, image_shape, config):
     error = pixel_error(pred, target, image_shape)
     point_loss = charbonnier(error, epsilon) / scale
     xy = ((point_loss * valid).sum(-1) / counts).mean()
+    # Width is a diameter normalized by image size (XY uses size - 1).
+    width_error = (pred[..., 2:3].float() - target[..., 2:3].float()) * image_shape[-1]
+    width_values = charbonnier(width_error, epsilon) / scale
+    width = ((width_values * valid).sum(-1) / counts).mean()
     start = (charbonnier(error[:, 0], epsilon) / scale).mean()
     pairs = valid[:, 1:] & valid[:, :-1]
     pair_counts = pairs.sum(-1)
@@ -44,7 +48,7 @@ def geometry_losses(pred, target, valid, image_shape, config):
         delta = per_stroke[has_pairs].mean()
     else:
         delta = pred.sum() * 0
-    return dict(xy=xy, start=start, delta=delta)
+    return dict(xy=xy, width=width, start=start, delta=delta)
 
 
 @torch.no_grad()

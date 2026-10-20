@@ -109,6 +109,8 @@ def main():
             value['iou_filters'] = dataset.iou_filters
         if config.get('geometry_loss'):
             value['geometry_loss'] = config['geometry_loss']
+            # Width now uses stroke-balanced pixel Charbonnier, not normalized Smooth L1.
+            value['geometry_loss_version'] = 2
         if config.get('early_stopping'):
             value['early_stopping'] = config['early_stopping']
         return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
