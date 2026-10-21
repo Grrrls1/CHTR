@@ -1,12 +1,12 @@
 {
   "training_mode": "free_rollout",
-  "dataset": "../data/chtr_mmah_lmdb",
-  "initial_weights": "runs/full_separated_10gb/job_237/last.pt",
-  "output_dir": "runs/free_rollout_full",
+  "dataset": "../data/chtr_mmah_lmdb_1915",
+  "initialization": "random",
+  "output_dir": "runs/free_rollout_1915_dim128_batch24",
   "device": "cuda:0",
   "seed": 42,
   "threads": 2,
-  "epochs": 100,
+  "epochs": 500,
   "max_steps": 0,
   "train_limit": 0,
   "validation_limit": 32,
@@ -15,6 +15,25 @@
   "weight_decay": 0.0,
   "grad_clip": 1.0,
   "checkpoint_every": 200,
+  "model": {
+    "backbone": "cnn",
+    "pretrained": false,
+    "dim": 128,
+    "heads": 4,
+    "stroke_layers": 2,
+    "point_layers": 2,
+    "dropout": 0.0,
+    "max_strokes": 64,
+    "max_points": 1024,
+    "memory_size": 8,
+    "mask_alpha": 1.0,
+    "separate_branches": true
+  },
+  "early_stopping": {
+    "patience": 10,
+    "min_delta": 0.001,
+    "min_epochs": 20
+  },
   "rollout": {
     "max_strokes": 64,
     "max_points": 1024
@@ -46,5 +65,6 @@
     "endpoints": 0.5
   },
   "eval_every_epochs": 20,
-  "require_full_dataset": true
+  "require_full_dataset": true,
+  "batch_size": 24
 }

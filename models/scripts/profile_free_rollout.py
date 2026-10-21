@@ -7,7 +7,7 @@ from pathlib import Path
 import torch
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT.parent))
 from models.datasets.lmdb_dataset import CHTRModelDataset
-from models.networks.model import StrokeTrajectoryModel
+from models.training.free_rollout_setup import create_model
 from models.networks.free_rollout import rollout,visual_predictions
 from models.losses.free_rollout_loss import trajectory_loss,visual_loss,weighted_loss
 
@@ -17,14 +17,17 @@ def main():
     p.add_argument('--config',default=str(ROOT/'configs/free_rollout.json'))
     p.add_argument('--sample-ids',nargs='+',required=True)
     p.add_argument('--device',default='cuda:0');p.add_argument('--output',required=True)
+    p.add_argument('--checkpoint', help='Explicit matching checkpoint; omitted means random initialization')
     args=p.parse_args();config=json.loads(Path(args.config).read_text())
     output=Path(args.output)
     if output.exists():raise ValueError('use a new profiling output file')
     def resolve(value):
         path=Path(value);return path if path.is_absolute() else ROOT/path
     torch.set_num_threads(config.get('threads',2));device=torch.device(args.device)
-    ck=torch.load(resolve(config['initial_weights']),map_location='cpu',weights_only=False)
-    m=StrokeTrajectoryModel(**ck['config']['model']).to(device).eval();m.load_state_dict(ck['model'])
+    torch.manual_seed(config['seed'])
+    if torch.cuda.is_available():torch.cuda.manual_seed_all(config['seed'])
+    m,_=create_model(config,device,resolve(args.checkpoint) if args.checkpoint else None)
+    m.eval()
     ds=CHTRModelDataset(resolve(config['dataset']));indices={sid:i for i,sid in enumerate(ds.ids)}
     reports=[]
     for sid in args.sample_ids:

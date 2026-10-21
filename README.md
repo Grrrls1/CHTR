@@ -24,5 +24,9 @@ third_party/virtual_sketching/   带本地修改的 TF1 矢量化项目
 Virtual Sketching 使用独立旧 TensorFlow 1 环境，当前统一全量入口采用骨架路线。
 原项目的 VS 方法仍可通过流水线单独运行。
 
+当前自由训练使用全部 1915 样本、随机初始化、dim=128 和最多 500 epoch；早停沿用
+job237 的训练损失规则，默认不加载旧权重。配置、Slurm 入口和恢复方法见
+[FREE_ROLLOUT.md](models/FREE_ROLLOUT.md)。
+
 保留原目录结构、携带源码与必要权重/数据的选择性打包，以及 Linux/NVIDIA 本地查看
 job237 第 100 轮效果的方法，见 [本地评估与迁移](reproduction/LOCAL_EPOCH100.md)。

@@ -6,7 +6,7 @@
 points[T,6] = [x, y, width, continue, stroke_end, drawing_end]
 ```
 
-一笔对应一条连续路径。网络通过笔画掩码和类型监督学习笔画结构，并将预测结果作为轨迹生成的条件。本文以当前代码为准；已实现 teacher-forcing 训练和 image-only 自由解码，可微重绘仍待实现。运行方法见 [README.md](README.md)。
+一笔对应一条连续路径。网络通过笔画掩码和类型监督学习笔画结构，并将预测结果作为轨迹生成的条件。已实现 teacher-forcing、image-only 自由解码和独立的完整 BPTT free rollout 训练；可微重绘仍待实现。运行方法见 [README.md](README.md) 与 [FREE_ROLLOUT.md](FREE_ROLLOUT.md)。
 
 ## 1. 数据集
 
@@ -159,7 +159,7 @@ flowchart LR
 - **像素特征**保留空间细节，供掩码头定位当前笔画及其覆盖区域。
 - **视觉 tokens**提供整字上下文，供两个 Transformer 通过交叉注意力读取。
 
-当前支持自定义 CNN 和可选 ResNet-18，最小配置默认使用自定义 CNN。FPN 输出多尺度特征，隐藏维度 `D=64`。高分辨率特征在默认画布下约为 `[B,D,64,64]`；后两个尺度分别池化成 8×8 和 4×4 网格，展开并添加二维位置编码，形成 `[B,80,D]` 视觉 memory。网格大小由 `memory_size` 控制。
+当前支持自定义 CNN 和可选 ResNet-18，最小配置默认使用自定义 CNN。FPN 输出多尺度特征，原 teacher-forced 配置隐藏维度 `D=64`，当前从头训练的 free rollout 配置使用 `D=128`。高分辨率特征在默认画布下约为 `[B,D,64,64]`；后两个尺度分别池化成 8×8 和 4×4 网格，展开并添加二维位置编码，形成 `[B,80,D]` 视觉 memory。网格大小由 `memory_size` 控制。
 
 DINOv3 是后续可替换 backbone 候选，目前未接入；使用 ViT 时需另外设计空间特征适配。
 
@@ -207,7 +207,7 @@ attention_logits = QK^T / sqrt(D_head) + alpha * log(clamp(M_k, min=1e-4))
 
 | 配置 | 最小值 |
 | --- | --- |
-| 隐藏维度 | 64 |
+| 隐藏维度 | teacher-forced 为 64；当前 free rollout 为 128 |
 | 注意力头数 | 4 |
 | 笔画 / 点解码层数 | 2 / 2 |
 | FFN 维度 | 256 |

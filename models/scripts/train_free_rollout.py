@@ -1,4 +1,4 @@
-"""Full-dataset free rollout with periodic checkpoint and visual evaluation."""
+"""Image-only free rollout with explicit initialization and training-loss early stopping."""
 import argparse
 import hashlib
 import json
@@ -16,8 +16,9 @@ sys.path.insert(0, str(ROOT.parent))
 sys.path.insert(0, str(ROOT.parent/'reproduction/pipeline'))
 from common import render, states, iou
 from models.datasets.lmdb_dataset import CHTRModelDataset
-from models.networks.model import StrokeTrajectoryModel
-from models.networks.free_rollout import rollout, visual_predictions
+from models.training.free_rollout_setup import create_model
+from models.training.early_stopping import EarlyStopping
+from models.networks.free_rollout import rollout, visual_predictions, rollout_batch, visual_predictions_batch
 from models.losses.free_rollout_loss import trajectory_loss, visual_loss, weighted_loss, DEFAULT_WEIGHTS
 
 
@@ -28,6 +29,49 @@ def local_path(value):
 
 def to_device(sample, device):
     return {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in sample.items()}
+
+
+def train_microbatch(model, samples, config, denominator):
+    """One true parallel batch; reduce equally per image across accumulation."""
+    images = torch.stack([s['image'] for s in samples])
+    if len(samples) == 1:
+        results = [rollout(model, images, **config['rollout'])]
+    else:
+        results = rollout_batch(model, images, **config['rollout'])
+    log = {}
+    losses = []
+    for result, sample in zip(results, samples):
+        terms = trajectory_loss(result, sample, config)
+        losses.append(weighted_loss(terms, config))
+        for k, value in terms.items():
+            log[k] = log.get(k, 0.) + float(value.detach())/denominator
+        stats = dict(generated_points=sum(len(s['geometry']) for s in result['strokes']),
+            predicted_strokes=len(result['strokes']), gt_strokes=len(sample['stroke_types']),
+            completed=int(result['completed']), truncated=int(result['truncated']))
+        for k, value in stats.items():
+            log[k] = log.get(k, 0.) + value/denominator
+    loss = torch.stack(losses).sum()/denominator
+    if not torch.isfinite(loss):
+        raise RuntimeError('nonfinite point loss')
+    loss.backward()
+    # Release all point graphs before building the independent visual graph.
+    del loss, losses, terms, result, results
+    counts = [len(s['stroke_types']) for s in samples]
+    if len(samples) == 1:
+        visuals = [visual_predictions(model, images, counts[0])]
+    else:
+        visuals = visual_predictions_batch(model, images, counts)
+    losses = []
+    for prediction, sample in zip(visuals, samples):
+        terms = visual_loss(prediction, sample)
+        losses.append(weighted_loss(terms, config))
+        for k, value in terms.items():
+            log[k] = log.get(k, 0.) + float(value.detach())/denominator
+    loss = torch.stack(losses).sum()/denominator
+    if not torch.isfinite(loss):
+        raise RuntimeError('nonfinite visual loss')
+    loss.backward()
+    return log
 
 
 @torch.no_grad()
@@ -65,28 +109,44 @@ def main():
     p.add_argument('--config', default=str(ROOT/'configs/free_rollout.json'))
     p.add_argument('--output-dir'); p.add_argument('--device'); p.add_argument('--dataset')
     p.add_argument('--max-steps', type=int); p.add_argument('--epochs', type=int)
+    p.add_argument('--batch-size', type=int)
     init = p.add_mutually_exclusive_group()
     init.add_argument('--init-weights'); init.add_argument('--resume')
     args = p.parse_args(); config = json.loads(Path(args.config).read_text())
-    for key in ('output_dir','device','dataset','max_steps','epochs'):
+    for key in ('output_dir','device','dataset','max_steps','epochs','batch_size'):
         if getattr(args,key) is not None: config[key] = getattr(args,key)
     if config.get('training_mode') != 'free_rollout': raise ValueError('requires free_rollout mode')
     if config['epochs'] < 1 or config['gradient_accumulation'] < 1 or config['checkpoint_every'] < 1:
         raise ValueError('epochs, accumulation and checkpoint_every must be positive')
+    batch_size = config.get('batch_size', 1)
+    if type(batch_size) is not int or batch_size < 1:
+        raise ValueError('batch_size must be a positive integer')
     if config['max_steps'] < 0: raise ValueError('max_steps must be nonnegative')
     if config['train_limit'] < 0 or config['validation_limit'] < 1:
         raise ValueError('train_limit=0 means all; validation_limit must be positive')
+    if config.get('initial_weights') and not (args.init_weights or args.resume):
+        raise ValueError('automatic initial_weights loading is disabled; remove it for random initialization')
+    stopper = EarlyStopping(config.get('early_stopping'))
     device = torch.device(config['device']); torch.set_num_threads(config.get('threads',2))
     random.seed(config['seed']); np.random.seed(config['seed']); torch.manual_seed(config['seed'])
     if torch.cuda.is_available(): torch.cuda.manual_seed_all(config['seed'])
     if device.type == 'cuda':
         if not torch.cuda.is_available(): raise RuntimeError('CUDA unavailable')
         torch.cuda.set_device(device)
-    checkpoint_path = local_path(args.resume or args.init_weights or config['initial_weights'])
-    ck = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
-    architecture = ck['config']['model']
-    model = StrokeTrajectoryModel(**architecture).to(device)
-    model.load_state_dict(ck['model'])
+    checkpoint_path = local_path(args.resume or args.init_weights) if (args.resume or args.init_weights) else None
+    model, ck = create_model(config, device, checkpoint_path)
+    config.pop('initial_weights', None)
+    config['initialization'] = 'random'
+    if args.init_weights:
+        config.update(initialization='checkpoint_weights', initial_weights=str(checkpoint_path))
+    elif args.resume:
+        config['initialization'] = ck['config'].get('initialization', 'random')
+        if ck['config'].get('initial_weights'):
+            config['initial_weights'] = ck['config']['initial_weights']
+    print(json.dumps(dict(initialization=config['initialization'], model=config['model'],
+        batch_size=batch_size, gradient_accumulation=config['gradient_accumulation'],
+        gpu_name=torch.cuda.get_device_name(device) if device.type == 'cuda' else None,
+        parameters=sum(p.numel() for p in model.parameters()), dataset=str(local_path(config['dataset'])))), flush=True)
     ds = CHTRModelDataset(local_path(config['dataset']))
     if len(ds) < 1: raise ValueError('requires a nonempty ready dataset')
     # Stable stroke-count coverage selects fixed training-image evaluation,
@@ -102,14 +162,12 @@ def main():
         raise ValueError('full dataset run must use every ready sample')
     if not isinstance(config.get('eval_every_epochs',20),int) or config.get('eval_every_epochs',20) < 1:
         raise ValueError('eval_every_epochs must be positive')
-    config['model'] = architecture
-    config['initial_weights'] = str(local_path(config['initial_weights'])) if not args.init_weights else str(checkpoint_path)
-    signature_config = {k:v for k,v in config.items() if k not in ('output_dir','device','epochs','max_steps','initial_weights')}
+    signature_config = {k:v for k,v in config.items() if k not in ('output_dir','device','epochs','max_steps','initial_weights','initialization')}
     signature = hashlib.sha256(json.dumps(dict(config=signature_config, dataset=str(local_path(config['dataset'])),
                   train_ids=[ds.ids[i] for i in training], eval_ids=[ds.ids[i] for i in eval_indices]), sort_keys=True).encode()).hexdigest()
     output = local_path(config['output_dir'])
     if args.resume:
-        if ck.get('free_rollout_version') != 1 or ck.get('signature') != signature:
+        if ck.get('free_rollout_version') != 2 or ck.get('signature') != signature or 'early_stopping' not in ck:
             raise ValueError('resume requires matching free-rollout version, data and training settings')
         if output != checkpoint_path.parent: raise ValueError('resume must use checkpoint output directory')
     elif output.exists() and any(output.iterdir()):
@@ -123,19 +181,24 @@ def main():
     step=epoch=cursor=0; best=-1.
     if args.resume:
         optimizer.load_state_dict(ck['optimizer']);step=ck['step'];epoch=ck['epoch'];cursor=ck['cursor'];best=ck['best_iou']
+        stopper.load_state_dict(ck['early_stopping'])
         torch.set_rng_state(ck['rng']['torch']); random.setstate(ck['rng']['python']);np.random.set_state(ck['rng']['numpy'])
         if device.type=='cuda' and ck['rng']['cuda'] is not None: torch.cuda.set_rng_state_all(ck['rng']['cuda'])
     def save(name):
-        payload=dict(free_rollout_version=1,signature=signature,model=model.state_dict(),optimizer=optimizer.state_dict(),
+        payload=dict(free_rollout_version=2,signature=signature,model=model.state_dict(),optimizer=optimizer.state_dict(),
             config=config,step=step,epoch=epoch,cursor=cursor,best_iou=best,
+            early_stopping=stopper.state_dict(),
             rng=dict(torch=torch.get_rng_state(),python=random.getstate(),numpy=np.random.get_state(),
                      cuda=torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None))
         temp=output/(name+'.tmp');torch.save(payload,temp);temp.replace(output/name)
     def progress(reason='running'):
         target=output/'training_status.json';temp=output/'training_status.json.tmp'
         temp.write_text(json.dumps(dict(step=step,completed_epochs=epoch,cursor=cursor,
+            batch_size=batch_size,effective_batch_size=batch_size*config['gradient_accumulation'],
             train_samples=len(training),evaluation_samples=len(eval_indices),target_epochs=config['epochs'],
-            eval_every_epochs=config.get('eval_every_epochs',20),best_iou=best,reason=reason),indent=2)+'\n')
+            eval_every_epochs=config.get('eval_every_epochs',20),best_iou=best,reason=reason,
+            best_epoch_loss=stopper.best,bad_epochs=stopper.bad_epochs,
+            early_stopping=config.get('early_stopping',{}),initialization=config['initialization']),indent=2)+'\n')
         temp.replace(target)
     def validation():
         nonlocal best
@@ -152,6 +215,8 @@ def main():
     for signum in (signal.SIGUSR1, signal.SIGTERM):
         signal.signal(signum,request_stop)
     model.train()
+    if stopper.should_stop:
+        progress('early_stopping');ds.close();return
     if not args.resume: validation()
     progress()
     while not stop_requested and epoch < config['epochs'] and (not config['max_steps'] or step < config['max_steps']):
@@ -160,28 +225,13 @@ def main():
         while not stop_requested and cursor < len(order):
             if config['max_steps'] and step >= config['max_steps']:break
             optimizer.zero_grad(set_to_none=True)
-            chunk=order[cursor:cursor+config['gradient_accumulation']]
+            chunk=order[cursor:cursor+batch_size*config['gradient_accumulation']]
             log={};started=time.monotonic()
             if device.type=='cuda':torch.cuda.reset_peak_memory_stats(device)
-            for index in chunk:
-                sample=to_device(ds[index],device)
-                result=rollout(model,sample['image'][None],**config['rollout'])
-                terms=trajectory_loss(result,sample,config)
-                # Separate backward releases the large point graph before visual
-                # supervision, keeping memory bounded to one image/branch graph.
-                loss=weighted_loss(terms,config)/len(chunk)
-                if not torch.isfinite(loss):raise RuntimeError('nonfinite point loss')
-                loss.backward()
-                visuals=visual_predictions(model,sample['image'][None],len(sample['stroke_types']))
-                vterms=visual_loss(visuals,sample);vloss=weighted_loss(vterms,config)/len(chunk)
-                if not torch.isfinite(vloss):raise RuntimeError('nonfinite visual loss')
-                vloss.backward()
-                for k,v in dict(terms,**vterms).items():log[k]=log.get(k,0.)+float(v.detach())/len(chunk)
-                for k,v in dict(generated_points=sum(len(s['geometry']) for s in result['strokes']),
-                    predicted_strokes=len(result['strokes']),gt_strokes=len(sample['stroke_types']),
-                    completed=int(result['completed']),truncated=int(result['truncated'])).items():
-                    log[k]=log.get(k,0.)+v/len(chunk)
-                del loss,vloss,terms,vterms,result,visuals
+            for start in range(0, len(chunk), batch_size):
+                samples=[to_device(ds[index],device) for index in chunk[start:start+batch_size]]
+                partial=train_microbatch(model,samples,config,len(chunk))
+                for k,value in partial.items():log[k]=log.get(k,0.)+value
             for group in optimizer.param_groups:
                 norm=torch.nn.utils.clip_grad_norm_(group['params'],config['grad_clip'])
                 if not torch.isfinite(norm):raise RuntimeError('nonfinite gradient')
@@ -189,7 +239,9 @@ def main():
             optimizer.step();step+=1;cursor+=len(chunk)
             weights=dict(DEFAULT_WEIGHTS,**config.get('loss_weights',{}))
             log['loss']=sum(weights[k]*log[k] for k in DEFAULT_WEIGHTS)
-            log.update(step=step,epoch=epoch,step_seconds=time.monotonic()-started)
+            stopper.add(log['loss'], len(chunk))
+            log.update(step=step,epoch=epoch,step_seconds=time.monotonic()-started,
+                       batch_size=min(batch_size,len(chunk)),samples_in_update=len(chunk))
             if device.type=='cuda':log['peak_cuda_allocated_mb']=torch.cuda.max_memory_allocated(device)/1024**2
             with (output/'metrics.jsonl').open('a') as f:f.write(json.dumps(log)+'\n')
             print(json.dumps(log),flush=True)
@@ -198,8 +250,16 @@ def main():
         if stop_requested:
             save('last.pt');progress('interrupted');ds.close();return
         epoch_complete = cursor==len(order)
-        if epoch_complete:epoch+=1;cursor=0
-        if epoch_complete and (epoch%config.get('eval_every_epochs',20)==0 or epoch==config['epochs']):
+        stop = False
+        if epoch_complete:
+            epoch+=1;cursor=0
+            mean, improved, stop = stopper.finish_epoch(epoch)
+            summary=dict(epoch=epoch,step=step,mean_training_loss=mean,best_loss=stopper.best,
+                         bad_epochs=stopper.bad_epochs,improved=improved)
+            with (output/'epoch_metrics.jsonl').open('a') as f:f.write(json.dumps(summary)+'\n')
+            print('epoch_summary='+json.dumps(summary),flush=True)
+            if improved:save('best_loss.pt')
+        if epoch_complete and (epoch%config.get('eval_every_epochs',20)==0 or epoch==config['epochs'] or stop):
             validation()
             name=f'epoch_{epoch:03d}.pt';save(name)
             gallery=output/f'eval_epoch_{epoch:03d}'
@@ -215,6 +275,8 @@ def main():
                 if not stop_requested:raise
                 save('last.pt');progress('interrupted');ds.close();return
         save('last.pt');progress()
+        if stop:
+            progress('early_stopping');ds.close();return
     if stop_requested:
         save('last.pt');progress('interrupted')
     else:

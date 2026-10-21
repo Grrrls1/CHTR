@@ -2,8 +2,8 @@
 
 本目录实现 LMDB 数据适配、图像编码、有序笔画解码、逐点轨迹生成与多任务训练。
 输入为单张灰度书法图像，输出按书写顺序排列的笔画轨迹。模型结构见
-[ARCHITECTURE.md](ARCHITECTURE.md)，分支监督与停止规则见
-[BRANCH_SEPARATION.md](BRANCH_SEPARATION.md)。
+[ARCHITECTURE.md](ARCHITECTURE.md)，1915 数据集从头初始化的自由训练见
+[FREE_ROLLOUT.md](FREE_ROLLOUT.md)。
 
 ## 数据接口
 
@@ -34,13 +34,18 @@ mask 默认使用 `mask_cleanup_whole`，也可用 `--mask-iou-stage mask_extrac
 笔画模块预测 mask、类别、最后一笔及辅助起终点；逐点模块接收图像特征、笔画条件、
 软 mask 注意力偏置和点历史，预测坐标、宽度与三类点事件。
 
-训练采用 teacher forcing：点历史来自真实标签，`condition_mode=predicted` 使用预测的 mask 和类别。
+原 `scripts/train.py` 采用 teacher forcing：点历史来自真实标签，`condition_mode=predicted` 使用预测的 mask 和类别。
 `model.separate_branches=true` 时，视觉和逐点参数组分别接受各自监督并分别裁剪梯度。
 XY 与宽度损失均采用像素尺度 Charbonnier，共用 `geometry_loss.epsilon_px` 和
 `scale_px`，按有效点先在笔内平均，再对笔画平均。宽度按图像尺寸还原为像素直径，
 默认权重为 1；另含首点与笔内位移监督。其他损失包含
 点状态、mask BCE/Dice、类别、最后一笔和辅助起终点。
-可微重绘损失与自喂历史 rollout 训练尚未实现。
+独立 `scripts/train_free_rollout.py` 已实现完全自喂历史训练：预测几何与事件决定后续历史、换笔和结束，
+连续历史保留完整 BPTT。可微重绘损失尚未实现。
+
+当前 free rollout 配置为 `configs/free_rollout.json`：使用全部 1915 样本、随机初始化、dim=128、
+最大 500 epoch，早停沿用 job237 的训练损失规则（10 / 0.001 / 20）。默认不读取任何旧 `last.pt`。
+batch=24、梯度累积=1、学习率 1e-5；原 teacher-forced 全量配置继续单独保留。
 
 ## 当前全量配置
 

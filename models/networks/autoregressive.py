@@ -15,7 +15,7 @@ def encode_image(model, images):
 
 
 def next_stroke(model,pixels,memory,sizes,history,image_size):
-    prefix=torch.cat([model.stroke_bos.expand(1,-1,-1)]+[z[:,None] for z in history],1)
+    prefix=torch.cat([model.stroke_bos.expand(memory.shape[0],-1,-1)]+[z[:,None] for z in history],1)
     prefix=prefix+model.stroke_position(torch.arange(len(history)+1,device=memory.device))[None]
     causal=torch.ones(prefix.shape[1],prefix.shape[1],device=memory.device,dtype=torch.bool).triu(1)
     z=model.stroke_decoder(prefix,memory,tgt_mask=causal)[:,-1]
@@ -53,7 +53,7 @@ def attention_step(attn,q,cache,memory=None,bias=None):
 
 def point_step(model,previous,index,cond,memory,bias,caches):
     if index==0:
-        x=model.point_bos.expand(1,-1,-1)
+        x=model.point_bos.expand(cond.shape[0],-1,-1)
     else:
         x=model.point_embedding(previous[:,None])
     x=x+model.point_position.weight[index][None,None]+cond[:,None]
