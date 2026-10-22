@@ -159,7 +159,7 @@ flowchart LR
 - **像素特征**保留空间细节，供掩码头定位当前笔画及其覆盖区域。
 - **视觉 tokens**提供整字上下文，供两个 Transformer 通过交叉注意力读取。
 
-当前支持自定义 CNN 和可选 ResNet-18，最小配置默认使用自定义 CNN。FPN 输出多尺度特征，原 teacher-forced 配置隐藏维度 `D=64`，当前从头训练的 free rollout 配置使用 `D=128`。高分辨率特征在默认画布下约为 `[B,D,64,64]`；后两个尺度分别池化成 8×8 和 4×4 网格，展开并添加二维位置编码，形成 `[B,80,D]` 视觉 memory。网格大小由 `memory_size` 控制。
+当前支持自定义 CNN 和完整 ResNet-18（四个残差阶段），最小及原 teacher-forced 配置保留 CNN，默认 free rollout 配置使用无预训练 ResNet-18 + 四级 FPN。FPN 输出多尺度特征，原 teacher-forced 配置隐藏维度 `D=64`，当前从头训练的 free rollout 配置使用 `D=128`。高分辨率特征在默认画布下约为 `[B,D,64,64]`；后两个尺度分别池化成 8×8 和 4×4 网格，展开并添加二维位置编码，形成 `[B,80,D]` 视觉 memory。网格大小由 `memory_size` 控制。
 
 DINOv3 是后续可替换 backbone 候选，目前未接入；使用 ViT 时需另外设计空间特征适配。
 

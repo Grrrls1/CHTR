@@ -1,0 +1,49 @@
+{
+  "training_mode": "hierarchical_ar_three_task",
+  "dataset": "../data/chtr_mmah_lmdb_1915",
+  "output_dir": "runs/hierarchical_ar_three_task",
+  "initialization": "random",
+  "normalization": "xy_size_minus_one_width_size",
+  "loss_reduction": "equal_images_equal_strokes_balanced_end_groups",
+  "device": "cuda:0",
+  "seed": 42,
+  "threads": 2,
+  "batch_size": 24,
+  "gradient_accumulation": 1,
+  "epochs": 500,
+  "max_steps": 0,
+  "train_limit": 0,
+  "validation_fraction": 0.1,
+  "eval_limit": 32,
+  "eval_every_epochs": 20,
+  "checkpoint_every": 100,
+  "learning_rate": 0.00001,
+  "weight_decay": 0.0,
+  "grad_clip": 1.0,
+  "model": {
+    "backbone": "resnet18",
+    "pretrained": false,
+    "dim": 128,
+    "heads": 4,
+    "stroke_layers": 2,
+    "point_layers": 2,
+    "memory_size": 8,
+    "max_strokes": 16,
+    "max_points": 384,
+    "dropout": 0.0
+  },
+  "decode": {
+    "point_end_threshold": 0.5,
+    "stroke_end_threshold": 0.5
+  },
+  "loss_weights": {
+    "geo": 1.0,
+    "point_end": 1.0,
+    "stroke_end": 1.0
+  },
+  "early_stopping": {
+    "patience": 10,
+    "min_delta": 0.001,
+    "min_epochs": 20
+  }
+}

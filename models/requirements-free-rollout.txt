@@ -1,4 +1,5 @@
 -r requirements.txt
 # Cached point decoding requires scaled_dot_product_attention.
 torch>=2.0
+torchvision>=0.15
 matplotlib>=3.5

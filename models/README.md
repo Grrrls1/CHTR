@@ -5,6 +5,30 @@
 [ARCHITECTURE.md](ARCHITECTURE.md)，1915 数据集从头初始化的自由训练见
 [FREE_ROLLOUT.md](FREE_ROLLOUT.md)。
 
+## 新增：三个主任务的独立自回归基线
+
+实现入口：[train_hierarchical_ar.py](scripts/train_hierarchical_ar.py)，配置：
+[hierarchical_ar.json](configs/hierarchical_ar.json)，完整说明：[HIERARCHICAL_AR.md](HIERARCHICAL_AR.md)。
+本次新增独立模型和损失，原模型、原loss和原训练 / 评估入口保持原样。
+
+- **三个主任务**：原始点几何L1、点结束BCE、笔画结束BCE；没有mask/type、endpoints或数量头。
+- **训练**：反馈自预测的三维几何，按真实有效笔数 / 点数展开；结束预测不截断监督，不做64点重采样。
+- **推理**：点结束头控制收笔，笔画结束头控制整字结束；仅输入图像，保护上限384点/笔、16笔/图。
+- **网络**：随机初始化ResNet-18/FPN、dim128，几何梯度可回传全部上游；独立checkpoint模式和版本。
+- **数据**：默认1723张训练、192张按图留出验证，各固定评估32张；与旧全1915训练须区分。
+- **验证状态**：65项CPU测试通过；GPU batch24容量、小集拟合和正式训练仍待验证，尚未提交新作业。
+
+在工作区根目录提交新模式：
+
+```bash
+mkdir -p logs
+gpu-sbatch --user_name lkh CHTR/models/scripts/train_hierarchical_ar.slurm
+```
+
+新产物目录为 `models/runs/hierarchical_ar_three_task/job_<jobid>/`，
+专用评估入口为 [evaluate_hierarchical_ar.py](scripts/evaluate_hierarchical_ar.py)，不能使用旧三分类评估器。
+计划与完成状态见 [主 TODO](TODO.md)；后续生成式路线见 [扩散／Flow Matching TODO](TODO_DIFFUSION.md)。
+
 ## 数据接口
 
 数据来源为 `../data/chtr_mmah_lmdb/`，读取器位于 `datasets/`。
@@ -30,7 +54,9 @@ mask 默认使用 `mask_cleanup_whole`，也可用 `--mask-iou-stage mask_extrac
 
 ## 网络与训练方式
 
-默认模型为无预训练 CNN/FPN，隐藏维度 64，笔画与逐点解码器各 2 层。
+原 teacher-forced 配置及模型构造默认保留无预训练 CNN/FPN、隐藏维度64。
+当前 free rollout 默认改为完整 ResNet-18（四个残差阶段）+ FPN、隐藏维度128，随机初始化；
+两种配置的笔画与逐点解码器均各2层。
 笔画模块预测 mask、类别、最后一笔及辅助起终点；逐点模块接收图像特征、笔画条件、
 软 mask 注意力偏置和点历史，预测坐标、宽度与三类点事件。
 
@@ -43,7 +69,7 @@ XY 与宽度损失均采用像素尺度 Charbonnier，共用 `geometry_loss.epsi
 独立 `scripts/train_free_rollout.py` 已实现完全自喂历史训练：预测几何与事件决定后续历史、换笔和结束，
 连续历史保留完整 BPTT。可微重绘损失尚未实现。
 
-当前 free rollout 配置为 `configs/free_rollout.json`：使用全部 1915 样本、随机初始化、dim=128、
+当前 free rollout 配置为 `configs/free_rollout.json`：使用全部 1915 样本、随机初始化、ResNet-18/FPN、dim=128、
 最大 500 epoch，早停沿用 job237 的训练损失规则（10 / 0.001 / 20）。默认不读取任何旧 `last.pt`。
 batch=24、梯度累积=1、学习率 1e-5；原 teacher-forced 全量配置继续单独保留。
 

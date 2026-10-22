@@ -145,6 +145,8 @@ class RolloutTrainingTests(unittest.TestCase):
         old=json.loads((ROOT/'configs/full_separated_10gb.json').read_text())
         self.assertEqual(current['early_stopping'],old['early_stopping'])
         self.assertEqual(current['model']['dim'],128)
+        self.assertEqual(current['model']['backbone'],'resnet18')
+        self.assertFalse(current['model']['pretrained'])
         self.assertEqual(current['epochs'],500)
         self.assertEqual(current['dataset'],'../data/chtr_mmah_lmdb_1915')
         self.assertNotIn('initial_weights',current)

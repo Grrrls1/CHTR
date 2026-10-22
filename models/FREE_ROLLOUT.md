@@ -8,9 +8,9 @@
 | 项目 | 设置 |
 | --- | --- |
 | 数据集 | `../data/chtr_mmah_lmdb_1915` 的全部 1915 条样本 |
-| 初始化 | 所有模型参数随机初始化，seed=42，CNN 无预训练；默认不加载任何 checkpoint |
-| 模型 | dim=128，heads=4，笔画/逐点解码器各 2 层，dropout=0 |
-| 参数量 | 2,945,859，约 295 万 |
+| 初始化 | 所有模型参数随机初始化，seed=42，ResNet-18 无预训练；默认不加载任何 checkpoint |
+| 模型 | 完整 ResNet-18（layer1–layer4）+ FPN，dim=128，heads=4，笔画/逐点解码器各 2 层，dropout=0 |
+| 参数量 | 13,162,979，约 1316 万；其中编码器 11,890,240 |
 | 训练 | 最大 500 轮，batch=24，梯度累积=1，学习率 1e-5 |
 | 早停 | 轮均训练损失，patience=10、min_delta=0.001、min_epochs=20，与 job237 相同 |
 | 展开 | 最多 64 笔、每笔 1024 点，完整历史、完整 BPTT |
@@ -30,7 +30,7 @@ Git 同步代码后，使用 `scripts/train_free_rollout.slurm` 申请单 GPU、
 可以从仓库根目录或其工作区父目录提交，先创建相应的 `logs/` 目录。
 保留调度器设置的 `CUDA_VISIBLE_DEVICES`，作业内使用 `cuda:0`。
 
-解释器需要 PyTorch >= 2.0、numpy、opencv-python、lmdb、matplotlib。
+解释器需要兼容的 PyTorch >= 2.0 / torchvision >= 0.15，以及 numpy、opencv-python、lmdb、matplotlib。
 已有 CUDA 兼容的 PyTorch 环境可安装 `models/requirements-free-rollout.txt` 中的其他依赖；
 PyTorch 的 CUDA 构建按服务器环境选择。
 Git 不包含 LMDB，服务器需已具备 1915 库。默认从头训练不需要 job237 或其他旧权重。
@@ -42,7 +42,7 @@ mkdir -p logs
 gpu-sbatch --user_name lkh models/scripts/train_free_rollout.slurm
 ```
 
-默认输出为 `models/runs/free_rollout_1915_dim128_batch24/job_<作业号>/`。
+默认输出为 `models/runs/free_rollout_1915_resnet18_dim128_batch24/job_<作业号>/`。
 提交入口不传 `--init-weights` 或 `--resume`，训练脚本也不再自动读取配置里的旧权重路径。
 模型结构完全由配置中的 `model` 决定，dim=128 不从旧 checkpoint 的 dim=64 覆盖回来。
 其他账户提交时替换 `--user_name`；可通过 `CHTR_PYTHON` 指定已有环境。
@@ -66,7 +66,7 @@ gpu-sbatch --user_name lkh models/scripts/train_free_rollout.slurm
 
 恢复是明确传入 `--resume` 的操作，默认新运行不会自动执行。
 `--init-weights` 仍保留为显式实验选项，两者互斥，且都要求 checkpoint 的模型结构与配置完全一致。
-旧 dim=64 的 job237 不能作为当前 dim=128 运行的初始化或恢复权重。
+旧 CNN backbone 的 job333 和旧 dim=64 的 job237 均不能作为当前 ResNet-18 运行的精确恢复权重。
 恢复要求数据路径、样本、模型及训练设置相同，允许改变 device 或增加 epochs/max_steps。batch_size 参与兼容签名，不能用旧 batch=1 断点直接恢复 batch=24。
 保存包含优化器、样本游标、随机状态、轮内损失累计值、早停状态和兼容签名。
 当前 free-rollout checkpoint 版本为 2，缺少早停状态的旧版断点不能直接精确恢复。
@@ -150,6 +150,7 @@ soft-DTW 或语义笔画匹配；发生漏笔后按序号配对也可能错配�
 
 ## 2026-10-21 batch24 GPU 验证
 
+以下是旧 CNN/FPN backbone 的历史测量，不代表新 ResNet-18 的显存容量。
 RTX 5090，dim=128、FP32、完整 BPTT：Slurm 验证任务 326 通过。
 24 张真实训练图片的三步随机初始化训练无 OOM，峰值约 1.17 GB（初期每图只生成 1 点，不能代表后期速度或显存）。
 独立的受控容量测试强制生成指定长度，只用于验证完整反传和显存，不是训练效果评估：
@@ -161,3 +162,13 @@ RTX 5090，dim=128、FP32、完整 BPTT：Slurm 验证任务 326 通过。
 
 两项均得到有限梯度；后者已接近单卡容量，更多长笔组合仍可能超出显存，不能由此保证所有 64×1024 上限组合都可训练。
 验证记录保存在本地 `runs/free_rollout_1915_dim128_batch24/validation_20261021/benchmark.json`，不提交训练产物到 Git。
+
+## 2026-10-22 ResNet-18 Backbone 切换
+
+默认 free rollout 改为 `backbone=resnet18`、`pretrained=false`，其余损失和三分类停止机制沿用原实现。
+灰度输入复制成三通道并使用固定 ImageNet 均值 / 标准差变换；不下载预训练权重。
+使用全部四个残差阶段并构建四级 FPN：256 像素输入对应 64/32/16/8 的空间网格，通道统一到128。
+最深两个尺度池化为 8×8 和4×4，保持80个视觉 memory tokens；mask 分支仍从64×64特征上采样。
+保留 ResNet 原生 BatchNorm：训练和 eval 分别使用批统计与运行统计，因此批量训练和单图评估不要求逐位一致。
+CPU 上49项测试通过，包含最深层梯度和批量完整训练反传；ResNet 的 batch24 GPU 容量仍待实测。
+后续需提交独立新作业才会使用该结构；修改配置不代表已有 CNN 作业已切换 Backbone。

@@ -2,7 +2,7 @@
   "training_mode": "free_rollout",
   "dataset": "../data/chtr_mmah_lmdb_1915",
   "initialization": "random",
-  "output_dir": "runs/free_rollout_1915_dim128_batch24",
+  "output_dir": "runs/free_rollout_1915_resnet18_dim128_batch24",
   "device": "cuda:0",
   "seed": 42,
   "threads": 2,
@@ -16,7 +16,7 @@
   "grad_clip": 1.0,
   "checkpoint_every": 200,
   "model": {
-    "backbone": "cnn",
+    "backbone": "resnet18",
     "pretrained": false,
     "dim": 128,
     "heads": 4,

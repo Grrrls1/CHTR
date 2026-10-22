@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=chtr-free-b24
+#SBATCH --job-name=chtr-r18-b24
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
@@ -14,7 +14,7 @@ project_root="$SLURM_SUBMIT_DIR"
 [[ -f "$project_root/models/scripts/train_free_rollout.py" ]] || project_root="$project_root/CHTR"
 project_root="$(cd -- "$project_root" && pwd -P)"
 train_python="${CHTR_PYTHON:-$project_root/third_party/StrokeExtraction/.venv/bin/python}"
-train_output="$project_root/models/runs/free_rollout_1915_dim128_batch24/job_$SLURM_JOB_ID"
+train_output="$project_root/models/runs/free_rollout_1915_resnet18_dim128_batch24/job_$SLURM_JOB_ID"
 export PYTHONUNBUFFERED=1 PYTHONNOUSERSITE=1 MPLBACKEND=Agg
 export OMP_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2 MKL_NUM_THREADS=2
 exec 9>"$project_root/data/.chtr_mmah_lmdb.lock"

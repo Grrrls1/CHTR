@@ -24,7 +24,7 @@ def block(cin, cout, stride):
 
 
 class CNNFPN(nn.Module):
-    """Download-free CNN baseline; optional torchvision ResNet-18 backbone."""
+    """CNN baseline or full ResNet-18 feature stages, followed by an FPN."""
     def __init__(self, dim, backbone='cnn', pretrained=False):
         super().__init__()
         self.backbone = backbone
@@ -38,8 +38,8 @@ class CNNFPN(nn.Module):
             from torchvision.models import resnet18, ResNet18_Weights
             net = resnet18(weights=ResNet18_Weights.DEFAULT if pretrained else None)
             self.stem = nn.Sequential(net.conv1, net.bn1, net.relu, net.maxpool)
-            self.stages = nn.ModuleList([net.layer1, net.layer2, net.layer3])
-            channels = [64, 128, 256]
+            self.stages = nn.ModuleList([net.layer1, net.layer2, net.layer3, net.layer4])
+            channels = [64, 128, 256, 512]
         else:
             raise ValueError('implemented backbones: cnn, resnet18')
         self.lateral = nn.ModuleList([nn.Conv2d(c, dim, 1) for c in channels])
