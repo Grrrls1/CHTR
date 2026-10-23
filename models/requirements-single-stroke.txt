@@ -1,0 +1,4 @@
+-r requirements.txt
+# Install a torchvision version matching the installed torch version.
+torchvision>=0.14
+Pillow>=9.1

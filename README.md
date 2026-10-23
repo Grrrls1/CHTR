@@ -27,7 +27,8 @@ Virtual Sketching 使用独立旧 TensorFlow 1 环境，当前统一全量入口
 当前唯一研发计划是将有序笔画预测与单笔轨迹生成的两阶段方法迁移到书法，
 见 [主TODO](models/TODO.md) 与 [工作交接](HANDOFF.md)。
 保留 job237 作为历史基线；free rollout、三任务AR及扩散路线的后续待办均已放弃。
-新两阶段网络尚未实施，旧训练说明仅作历史参考。
+单笔轨迹阶段已实现并完成本机CPU smoke及全量数据接口审核，见 [单笔阶段说明](models/SINGLE_STROKE.md)。
+有序笔画阶段与串联尚未实现，旧训练说明仅作历史参考。
 
 保留原目录结构、携带源码与必要权重/数据的选择性打包，以及 Linux/NVIDIA 本地查看
 job237 第 100 轮效果的方法，见 [本地评估与迁移](reproduction/LOCAL_EPOCH100.md)。
