@@ -8,18 +8,19 @@ import time
 import cv2
 import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from models.datasets.single_stroke import StrokeCatalog, SingleStrokeDataset, masked_stroke_image
+from models.datasets.single_stroke import StrokeCatalog, SingleStrokeDataset, INPUT_PROTOCOL
 
 
 def audit(catalog, limit_per_split=0, max_points=4096):
-    report = dict(dataset_fingerprint=catalog.fingerprint, full_scan=not limit_per_split,
+    report = dict(dataset_fingerprint=catalog.fingerprint, input_protocol=INPUT_PROTOCOL, full_scan=not limit_per_split,
                   note='Asset/interface validation, not manual label-quality approval.', splits={})
     for name in ('train','val','test'):
         ds = SingleStrokeDataset(catalog,name,max_points=max_points)
         ids = ds.ids if not limit_per_split else [ds.ids[int(i)] for i in np.linspace(0,len(ds.ids)-1,min(limit_per_split,len(ds.ids)),dtype=int)]
         stats = dict(characters=len(ds.ids), strokes=len(ds), checked_characters=0, checked_strokes=0,
                      min_points=None, max_points=0, max_width_px=0., max_mask_distance_px=0.,
-                     points_outside_mask=0, points_checked=0, masked_content_matches=True)
+                     points_outside_mask=0, points_checked=0, stored_png_input_matches=True)
+        starts={sid:(ds.ends[i-1] if i else 0) for i,sid in enumerate(ds.ids)}
         for sid in ids:
             image,points,offsets,masks = catalog.character_assets(sid)
             for k,mask in enumerate(masks):
@@ -34,9 +35,10 @@ def audit(catalog, limit_per_split=0, max_points=4096):
                 d = distance[xy[:,1],xy[:,0]]
                 stats['max_mask_distance_px'] = max(stats['max_mask_distance_px'],float(d.max()))
                 stats['points_outside_mask'] += int((d>0).sum()); stats['points_checked'] += len(p)
-                stroke = masked_stroke_image(image,mask)
-                if not np.array_equal(stroke[mask],image[mask]) or not (stroke[~mask]==255).all():
-                    raise ValueError('masked original-image construction mismatch')
+                stored=catalog.stroke_png(sid,k)
+                loaded=np.rint(ds[starts[sid]+k]['image'][0].numpy()*255).astype(np.uint8)
+                if not np.array_equal(stored,loaded):
+                    raise ValueError('direct PNG dataset pixels differ from stored PNG')
             stats['checked_characters'] += 1; stats['checked_strokes'] += len(masks)
             if stats['checked_characters'] % 2000 == 0:
                 print(name,stats['checked_characters'],'characters checked',flush=True)

@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 import torch
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
-from models.datasets.single_stroke import StrokeCatalog,SingleStrokeDataset,collate_single_strokes
+from models.datasets.single_stroke import StrokeCatalog,SingleStrokeDataset,collate_single_strokes,INPUT_PROTOCOL
 from models.losses.single_stroke import single_stroke_loss
 from models.training.single_stroke import local_path,load_model,to_device,signature
 
@@ -82,13 +82,13 @@ def main():
                          teacher_forced={k:float(v) for k,v in terms.items()})
                 rows.append(row)
                 cards.append(f'<article><h2>{html.escape(s["character"])} {tag}</h2>'+''.join(f'<img src="{tag}_{kind}.png" width="256" alt="{kind}">' for kind in ('input','gt','pred'))+width_curve(gt,out)+'<pre>'+html.escape(json.dumps(row,ensure_ascii=False,indent=2))+'</pre></article>')
-        report=dict(condition='ground-truth stroke mask and first XY/width; not image-only inference',
+        report=dict(condition='stored stroke PNG and ground-truth first XY/width; not image-only inference',input_protocol=INPUT_PROTOCOL,
                     split=args.split,training_subset=args.training_subset,checkpoint=str(args.checkpoint),step=ck['step'],threshold=args.threshold,
                     decode_max_points=args.decode_max_points,samples=rows,
                     point_count_mae=float(np.mean([abs(r['point_count_error']) for r in rows])),
                     truncated=sum(r['truncated'] for r in rows),terminated=sum(r['terminated'] for r in rows))
         (args.output/'summary.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
-        (args.output/'index.html').write_text('<meta charset="utf-8"><title>Single stroke diagnostics</title><p>'+report['condition']+'</p><p>Input / label overlay / free decode overlay. Width: black=label, red=free prediction; each curve uses normalized sequence progress.</p>'+''.join(cards))
+        (args.output/'index.html').write_text('<meta charset="utf-8"><title>Single stroke diagnostics</title><p>'+report['condition']+'</p><p>Stored stroke PNG / ground-truth trajectory overlay / free-decode trajectory overlay. Red areas render trajectory widths; they are not stage-one masks. Width curves: black=label, red=free prediction; each curve uses normalized sequence progress.</p>'+''.join(cards))
         print(json.dumps({k:v for k,v in report.items() if k!='samples'},ensure_ascii=False),flush=True)
     finally:catalog.close()
 

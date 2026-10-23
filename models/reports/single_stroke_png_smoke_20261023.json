@@ -1,0 +1,506 @@
+{
+  "date": "2026-10-23",
+  "input_protocol": "stored_stroke_png_v2",
+  "change": "Train/val/conditioned evaluation decode stored strokeXXX.png directly; no original-image masking.",
+  "environment": {
+    "python": "/home/lkh/anaconda3/envs/test/bin/python",
+    "device": "cpu",
+    "cuda_available": false
+  },
+  "tests": {
+    "passed": 12,
+    "command": "/home/lkh/anaconda3/envs/test/bin/python -m unittest models.tests.test_dataset_split models.tests.test_single_stroke -v"
+  },
+  "data_audit": {
+    "dataset_fingerprint": "124790ac1671c8892db829c7d611c35d80171142e81b46fe469a48f6535f3563",
+    "input_protocol": "stored_stroke_png_v2",
+    "full_scan": false,
+    "note": "Asset/interface validation, not manual label-quality approval.",
+    "splits": {
+      "train": {
+        "characters": 56622,
+        "strokes": 576465,
+        "checked_characters": 64,
+        "checked_strokes": 653,
+        "min_points": 2,
+        "max_points": 226,
+        "max_width_px": 84.393798828125,
+        "max_mask_distance_px": 0.0,
+        "points_outside_mask": 0,
+        "points_checked": 37423,
+        "stored_png_input_matches": true
+      },
+      "val": {
+        "characters": 8121,
+        "strokes": 83119,
+        "checked_characters": 64,
+        "checked_strokes": 678,
+        "min_points": 2,
+        "max_points": 215,
+        "max_width_px": 49.937992095947266,
+        "max_mask_distance_px": 0.0,
+        "points_outside_mask": 0,
+        "points_checked": 37676,
+        "stored_png_input_matches": true
+      },
+      "test": {
+        "characters": 6714,
+        "strokes": 68413,
+        "checked_characters": 64,
+        "checked_strokes": 680,
+        "min_points": 2,
+        "max_points": 213,
+        "max_width_px": 50.362796783447266,
+        "max_mask_distance_px": 0.0,
+        "points_outside_mask": 0,
+        "points_checked": 36669,
+        "stored_png_input_matches": true
+      }
+    },
+    "seconds": 12.52439736999986
+  },
+  "prior_full_asset_audit": {
+    "report": "models/reports/single_stroke_smoke_20261023.json",
+    "characters": 71457,
+    "strokes": 727997,
+    "max_points": 393,
+    "note": "Assets/split unchanged; previous model metrics used the old masked-original input and are historical."
+  },
+  "runs": {
+    "train": {
+      "path": "models/runs/single_stroke_png_smoke_v2/train",
+      "config": {
+        "training_mode": "single_stroke_xy_width_v1",
+        "dataset": "data/chtr_mmah_lmdb",
+        "split_file": "models/data_splits/full_character_v1.json",
+        "output_dir": "models/runs/single_stroke_png_smoke_v2/train",
+        "seed": 42,
+        "device": "auto",
+        "threads": 2,
+        "batch_size": 2,
+        "epochs": 20,
+        "max_steps": 4,
+        "train_char_limit": 32,
+        "train_stroke_limit": 8,
+        "eval_strokes": 2,
+        "eval_every_steps": 4,
+        "augment": false,
+        "learning_rate": 0.0001,
+        "weight_decay": 0.0,
+        "width_weight": 1.0,
+        "valid_weight": 0.2,
+        "grad_clip": 1.0,
+        "model": {
+          "dim": 32,
+          "heads": 4,
+          "encoder_layers": 1,
+          "decoder_layers": 4,
+          "max_points": 4096,
+          "dropout": 0.0
+        },
+        "input_protocol": "stored_stroke_png_v2"
+      },
+      "status": {
+        "step": 4,
+        "epoch": 1,
+        "cursor": 0,
+        "device": "cpu",
+        "seconds": 2.328292211000189,
+        "best_val_loss": 0.30421122908592224,
+        "parameters": 11502788,
+        "reason": "max_steps"
+      },
+      "train_characters": 8,
+      "train_strokes": 8,
+      "first_training_metrics": {
+        "kind": "train",
+        "step": 1,
+        "epoch": 0,
+        "cursor": 2,
+        "grad_norm": 3.129345417022705,
+        "loss": 0.38134679198265076,
+        "xy": 0.23286794126033783,
+        "width": 0.03677058592438698,
+        "validity": 0.5585412979125977,
+        "xy_mae_px": 59.381324768066406,
+        "width_mae_px": 9.423257827758789,
+        "width_bias_px": -5.188945770263672,
+        "terminal_recall": 0.0,
+        "valid_recall": 0.8148148059844971
+      },
+      "last_training_metrics": {
+        "kind": "train",
+        "step": 4,
+        "epoch": 1,
+        "cursor": 0,
+        "grad_norm": 2.496847629547119,
+        "loss": 0.44882625341415405,
+        "xy": 0.3326144814491272,
+        "width": 0.05276460573077202,
+        "validity": 0.31723588705062866,
+        "xy_mae_px": 84.81669616699219,
+        "width_mae_px": 13.517715454101562,
+        "width_bias_px": -9.853365898132324,
+        "terminal_recall": 0.0,
+        "valid_recall": 1.0
+      },
+      "validation": [
+        {
+          "kind": "validation",
+          "step": 4,
+          "split": "val",
+          "loss": 0.30421122908592224,
+          "xy": 0.20286497473716736,
+          "width": 0.0277739055454731,
+          "validity": 0.3678617477416992,
+          "xy_mae_px": 51.730567932128906,
+          "width_mae_px": 7.120096206665039,
+          "width_bias_px": 3.5406651496887207,
+          "terminal_recall": 0.0,
+          "valid_recall": 0.9906542301177979
+        }
+      ]
+    },
+    "fit_single": {
+      "path": "models/runs/single_stroke_png_smoke_v2/fit_single",
+      "config": {
+        "training_mode": "single_stroke_xy_width_v1",
+        "dataset": "data/chtr_mmah_lmdb",
+        "split_file": "models/data_splits/full_character_v1.json",
+        "output_dir": "models/runs/single_stroke_png_smoke_v2/fit_single",
+        "seed": 42,
+        "device": "auto",
+        "threads": 2,
+        "batch_size": 1,
+        "epochs": 200,
+        "max_steps": 128,
+        "train_char_limit": 32,
+        "train_stroke_limit": 1,
+        "eval_strokes": 2,
+        "eval_every_steps": 1000,
+        "augment": false,
+        "learning_rate": 0.0001,
+        "weight_decay": 0.0,
+        "width_weight": 1.0,
+        "valid_weight": 0.2,
+        "grad_clip": 1.0,
+        "model": {
+          "dim": 32,
+          "heads": 4,
+          "encoder_layers": 1,
+          "decoder_layers": 4,
+          "max_points": 4096,
+          "dropout": 0.0
+        },
+        "input_protocol": "stored_stroke_png_v2"
+      },
+      "status": {
+        "step": 128,
+        "epoch": 128,
+        "cursor": 0,
+        "device": "cpu",
+        "seconds": 22.16617589999987,
+        "best_val_loss": 0.445736899971962,
+        "parameters": 11502788,
+        "reason": "max_steps"
+      },
+      "train_characters": 1,
+      "train_strokes": 1,
+      "first_training_metrics": {
+        "kind": "train",
+        "step": 1,
+        "epoch": 1,
+        "cursor": 0,
+        "grad_norm": 2.027804136276245,
+        "loss": 0.2875118553638458,
+        "xy": 0.14316900074481964,
+        "width": 0.03435143083333969,
+        "validity": 0.5499570965766907,
+        "xy_mae_px": 36.508094787597656,
+        "width_mae_px": 8.803954124450684,
+        "width_bias_px": -7.811962604522705,
+        "terminal_recall": 0.0,
+        "valid_recall": 0.8297872543334961
+      },
+      "last_training_metrics": {
+        "kind": "train",
+        "step": 128,
+        "epoch": 128,
+        "cursor": 0,
+        "grad_norm": 1.7528642416000366,
+        "loss": 0.03535204008221626,
+        "xy": 0.012124952860176563,
+        "width": 0.0029158678371459246,
+        "validity": 0.10155609995126724,
+        "xy_mae_px": 3.0918631553649902,
+        "width_mae_px": 0.7562058568000793,
+        "width_bias_px": -0.726388156414032,
+        "terminal_recall": 1.0,
+        "valid_recall": 1.0
+      },
+      "validation": [
+        {
+          "kind": "validation",
+          "step": 128,
+          "split": "val",
+          "loss": 0.445736899971962,
+          "xy": 0.3463373929262161,
+          "width": 0.06647899374365807,
+          "validity": 0.164602592587471,
+          "xy_mae_px": 88.31603240966797,
+          "width_mae_px": 17.028615474700928,
+          "width_bias_px": 16.94082260131836,
+          "terminal_recall": 0.0,
+          "valid_recall": 1.0
+        }
+      ]
+    },
+    "fixed32_epoch1": {
+      "path": "models/runs/single_stroke_png_smoke_v2/fixed32_epoch1",
+      "config": {
+        "training_mode": "single_stroke_xy_width_v1",
+        "dataset": "data/chtr_mmah_lmdb",
+        "split_file": "models/data_splits/full_character_v1.json",
+        "output_dir": "models/runs/single_stroke_png_smoke_v2/fixed32_epoch1",
+        "seed": 42,
+        "device": "auto",
+        "threads": 2,
+        "batch_size": 1,
+        "epochs": 1,
+        "max_steps": 0,
+        "train_char_limit": 32,
+        "train_stroke_limit": 0,
+        "eval_strokes": 2,
+        "eval_every_steps": 1000,
+        "augment": false,
+        "learning_rate": 0.0001,
+        "weight_decay": 0.0,
+        "width_weight": 1.0,
+        "valid_weight": 0.2,
+        "grad_clip": 1.0,
+        "model": {
+          "dim": 32,
+          "heads": 4,
+          "encoder_layers": 1,
+          "decoder_layers": 4,
+          "max_points": 4096,
+          "dropout": 0.0
+        },
+        "input_protocol": "stored_stroke_png_v2"
+      },
+      "status": {
+        "step": 334,
+        "epoch": 1,
+        "cursor": 0,
+        "device": "cpu",
+        "seconds": 59.4120786819999,
+        "best_val_loss": 0.14701499417424202,
+        "parameters": 11502788,
+        "reason": "epochs"
+      },
+      "train_characters": 32,
+      "train_strokes": 334,
+      "first_training_metrics": {
+        "kind": "train",
+        "step": 1,
+        "epoch": 0,
+        "cursor": 1,
+        "grad_norm": 2.7922918796539307,
+        "loss": 0.3607173562049866,
+        "xy": 0.22944419085979462,
+        "width": 0.02328907698392868,
+        "validity": 0.539920449256897,
+        "xy_mae_px": 58.50826644897461,
+        "width_mae_px": 5.971961975097656,
+        "width_bias_px": -2.349231481552124,
+        "terminal_recall": 0.0,
+        "valid_recall": 0.8136646151542664
+      },
+      "last_training_metrics": {
+        "kind": "train",
+        "step": 334,
+        "epoch": 1,
+        "cursor": 0,
+        "grad_norm": 1.4002636671066284,
+        "loss": 0.12800320982933044,
+        "xy": 0.05878177285194397,
+        "width": 0.03987857326865196,
+        "validity": 0.14671427011489868,
+        "xy_mae_px": 14.989351272583008,
+        "width_mae_px": 10.218908309936523,
+        "width_bias_px": 10.218908309936523,
+        "terminal_recall": 0.0,
+        "valid_recall": 1.0
+      },
+      "validation": [
+        {
+          "kind": "validation",
+          "step": 334,
+          "split": "val",
+          "loss": 0.14701499417424202,
+          "xy": 0.10088235884904861,
+          "width": 0.026394871063530445,
+          "validity": 0.09868880361318588,
+          "xy_mae_px": 25.72500228881836,
+          "width_mae_px": 6.76707124710083,
+          "width_bias_px": 5.764288425445557,
+          "terminal_recall": 0.0,
+          "valid_recall": 1.0
+        }
+      ]
+    }
+  },
+  "exports": [
+    {
+      "path": "models/runs/single_stroke_png_smoke_v2/fit_single/eval_train",
+      "summary": {
+        "condition": "stored stroke PNG and ground-truth first XY/width; not image-only inference",
+        "input_protocol": "stored_stroke_png_v2",
+        "split": "train",
+        "training_subset": true,
+        "checkpoint": "models/runs/single_stroke_png_smoke_v2/fit_single/last.pt",
+        "step": 128,
+        "threshold": 0.5,
+        "decode_max_points": 256,
+        "samples": [
+          {
+            "sample_id": "ccd_u05DFD_154576",
+            "stroke_index": 3,
+            "character": "巽",
+            "split": "train",
+            "gt_points": 48,
+            "predicted_points": 48,
+            "point_count_error": 0,
+            "stop_reason": "invalid",
+            "truncated": false,
+            "terminated": true,
+            "first_xyz_given": true,
+            "first_xyz_exact": true,
+            "teacher_forced": {
+              "loss": 0.03434129059314728,
+              "xy": 0.011630787514150143,
+              "width": 0.0022431747056543827,
+              "validity": 0.10233664512634277,
+              "xy_mae_px": 2.965850830078125,
+              "width_mae_px": 0.5840087532997131,
+              "width_bias_px": -0.5304580330848694,
+              "terminal_recall": 1.0,
+              "valid_recall": 1.0
+            }
+          }
+        ],
+        "point_count_mae": 0.0,
+        "truncated": 0,
+        "terminated": 1
+      },
+      "exported_input_pngs_match_stored": true
+    },
+    {
+      "path": "models/runs/single_stroke_png_smoke_v2/train/eval_val",
+      "summary": {
+        "condition": "stored stroke PNG and ground-truth first XY/width; not image-only inference",
+        "input_protocol": "stored_stroke_png_v2",
+        "split": "val",
+        "training_subset": false,
+        "checkpoint": "models/runs/single_stroke_png_smoke_v2/train/last.pt",
+        "step": 4,
+        "threshold": 0.5,
+        "decode_max_points": 16,
+        "samples": [
+          {
+            "sample_id": "ccd_u04E00_102635",
+            "stroke_index": 0,
+            "character": "一",
+            "split": "val",
+            "gt_points": 180,
+            "predicted_points": 16,
+            "point_count_error": -164,
+            "stop_reason": "point_cap",
+            "truncated": true,
+            "terminated": false,
+            "first_xyz_given": true,
+            "first_xyz_exact": true,
+            "teacher_forced": {
+              "loss": 0.29127657413482666,
+              "xy": 0.19372494518756866,
+              "width": 0.02708584815263748,
+              "validity": 0.35232892632484436,
+              "xy_mae_px": 49.39986801147461,
+              "width_mae_px": 6.943945407867432,
+              "width_bias_px": 0.3952447175979614,
+              "terminal_recall": 0.0,
+              "valid_recall": 0.9888268113136292
+            }
+          },
+          {
+            "sample_id": "ccd_u06FC2_49142",
+            "stroke_index": 2,
+            "character": "濂",
+            "split": "val",
+            "gt_points": 80,
+            "predicted_points": 16,
+            "point_count_error": -64,
+            "stop_reason": "point_cap",
+            "truncated": true,
+            "terminated": false,
+            "first_xyz_given": true,
+            "first_xyz_exact": true,
+            "teacher_forced": {
+              "loss": 0.4248112142086029,
+              "xy": 0.32756662368774414,
+              "width": 0.026351185515522957,
+              "validity": 0.35446697473526,
+              "xy_mae_px": 83.52949523925781,
+              "width_mae_px": 6.755860328674316,
+              "width_bias_px": 2.638268232345581,
+              "terminal_recall": 0.0,
+              "valid_recall": 1.0
+            }
+          },
+          {
+            "sample_id": "ccd_u09FA0_19324",
+            "stroke_index": 16,
+            "character": "龠",
+            "split": "val",
+            "gt_points": 36,
+            "predicted_points": 16,
+            "point_count_error": -20,
+            "stop_reason": "point_cap",
+            "truncated": true,
+            "terminated": false,
+            "first_xyz_given": true,
+            "first_xyz_exact": true,
+            "teacher_forced": {
+              "loss": 0.31714585423469543,
+              "xy": 0.21200497448444366,
+              "width": 0.028461968526244164,
+              "validity": 0.38339459896087646,
+              "xy_mae_px": 54.06127166748047,
+              "width_mae_px": 7.2962470054626465,
+              "width_bias_px": 6.686085224151611,
+              "terminal_recall": 0.0,
+              "valid_recall": 1.0
+            }
+          }
+        ],
+        "point_count_mae": 82.66666666666667,
+        "truncated": 3,
+        "terminated": 0
+      },
+      "exported_input_pngs_match_stored": true
+    }
+  ],
+  "single_conditioned_free_decode": {
+    "gt_points": 48,
+    "predicted_points": 48,
+    "note": "Training stroke, true first XYZ, exclude supplied first point from errors.",
+    "xy_mae_px": 2.9828178882598877,
+    "width_mae_px": 0.5872135758399963
+  },
+  "limitations": [
+    "CPU smoke and small-set fitting, not full training or generalization proof.",
+    "Current input audit samples 64 characters per split, not a repeated full scan.",
+    "Stage-one inference still must use predicted masks on the normalized original image; complete pipeline pending.",
+    "Val scores use a fixed two-stroke subset; test used only for asset checks."
+  ]
+}

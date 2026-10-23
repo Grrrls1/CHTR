@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from models.datasets.single_stroke import StrokeCatalog, SingleStrokeDataset, collate_single_strokes
+from models.datasets.single_stroke import StrokeCatalog, SingleStrokeDataset, collate_single_strokes, INPUT_PROTOCOL
 from models.losses.single_stroke import single_stroke_loss
 from models.networks.single_stroke import SingleStrokeModel, MODE
 
@@ -51,7 +51,7 @@ def make_data(config):
 
 def signature(config,catalog):
     settings={k:v for k,v in config.items() if k not in ('output_dir','device','threads','epochs','max_steps')}
-    payload=dict(config=settings,dataset_fingerprint=catalog.fingerprint,
+    payload=dict(config=settings,input_protocol=INPUT_PROTOCOL,dataset_fingerprint=catalog.fingerprint,
                  splits={n:catalog.split[n+'_ids'] for n in ('train','val','test')})
     return hashlib.sha256(json.dumps(payload,sort_keys=True).encode()).hexdigest()
 
@@ -73,6 +73,7 @@ def load_model(checkpoint,device):
     # Checkpoints are trusted local files, never remote/untrusted pickle payloads.
     ck=torch.load(checkpoint,map_location=device)
     if ck.get('training_mode')!=MODE:raise ValueError('not a single-stroke checkpoint')
+    if ck.get('input_protocol')!=INPUT_PROTOCOL:raise ValueError('checkpoint uses a different stroke input protocol; retrain for direct PNG input')
     model=SingleStrokeModel(**ck['config']['model']).to(device)
     model.load_state_dict(ck['model'])
     return model,ck

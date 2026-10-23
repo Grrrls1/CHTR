@@ -9,7 +9,7 @@ import time
 import numpy as np
 import torch
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
-from models.datasets.single_stroke import collate_single_strokes
+from models.datasets.single_stroke import collate_single_strokes, INPUT_PROTOCOL
 from models.losses.single_stroke import single_stroke_loss
 from models.networks.single_stroke import SingleStrokeModel,MODE
 from models.training.single_stroke import local_path,to_device,make_data,signature,evaluate
@@ -24,6 +24,7 @@ def main():
     for k in ('output_dir','device','max_steps','epochs'):
         if getattr(args,k) is not None:config[k]=getattr(args,k)
     if config['training_mode']!=MODE:raise ValueError('incorrect mode')
+    if config.get('input_protocol')!=INPUT_PROTOCOL:raise ValueError('config requires stored_stroke_png_v2 input protocol')
     for k in ('batch_size','epochs','eval_strokes','eval_every_steps','threads'):
         if type(config[k]) is not int or config[k]<1:raise ValueError(k+' must be positive')
     for k in ('max_steps','train_char_limit','train_stroke_limit'):
@@ -53,14 +54,14 @@ def main():
             if ck['rng']['cuda'] is not None and torch.cuda.is_available():torch.cuda.set_rng_state_all(ck['rng']['cuda'])
         output.mkdir(parents=True,exist_ok=True)
         (output/'config.json').write_text(json.dumps(config,indent=2)+'\n')
-        usage=dict(training_mode=MODE,dataset_fingerprint=catalog.fingerprint,signature=sig,
+        usage=dict(training_mode=MODE,input_protocol=INPUT_PROTOCOL,dataset_fingerprint=catalog.fingerprint,signature=sig,
                    train_characters=len({train.key(i)[0] for i in indices}),train_strokes=len(indices),
                    train_keys=[train.key(i) for i in indices],val_keys=[val.key(i) for i in val_indices],
                    evaluation_split='val',test_used_for_model_selection=False,
                    training='all true historical XY/width; first XYZ given; subsequent points predicted')
         (output/'data_usage.json').write_text(json.dumps(usage,ensure_ascii=False,indent=2)+'\n')
         def save():
-            ck=dict(training_mode=MODE,config=config,signature=sig,model=model.state_dict(),
+            ck=dict(training_mode=MODE,input_protocol=INPUT_PROTOCOL,config=config,signature=sig,model=model.state_dict(),
                     optimizer=optimizer.state_dict(),scheduler=scheduler.state_dict(),step=step,epoch=epoch,cursor=cursor,
                     best_val_loss=best,rng=dict(torch=torch.get_rng_state(),python=random.getstate(),numpy=np.random.get_state(),
                                               cuda=torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None))

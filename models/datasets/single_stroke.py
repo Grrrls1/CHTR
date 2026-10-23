@@ -1,4 +1,4 @@
-"""Stage-two data: fixed character split, original grayscale under each stroke mask."""
+"""Stage-two training data: decoded stored stroke PNGs, without re-masking."""
 import bisect
 import io
 import json
@@ -13,6 +13,7 @@ from torch.utils.data import Dataset
 
 from .dataset_split import validate_split, read_candidates
 
+INPUT_PROTOCOL = 'stored_stroke_png_v2'
 
 class StrokeCatalog:
     """Validate once, share metadata and a read-only process-local LMDB handle."""
@@ -29,6 +30,7 @@ class StrokeCatalog:
         self.env_pid = None
         self.cached_id = None
         self.cached_assets = None
+        self.cached_stroke_pngs = None
 
     def _env(self):
         if self.env is not None and self.env_pid != os.getpid():
@@ -40,7 +42,7 @@ class StrokeCatalog:
 
     def __getstate__(self):
         state = dict(self.__dict__)
-        state.update(env=None, env_pid=None, cached_id=None, cached_assets=None)
+        state.update(env=None, env_pid=None, cached_id=None, cached_assets=None, cached_stroke_pngs=None)
         return state
 
     def close(self):
@@ -49,6 +51,7 @@ class StrokeCatalog:
         self.env = None
         self.env_pid = None
         self.cached_id = self.cached_assets = None
+        self.cached_stroke_pngs = None
 
     def character_assets(self, sid):
         if self.env_pid is not None and self.env_pid != os.getpid():
@@ -82,7 +85,7 @@ class StrokeCatalog:
         if len(stroke_map) != n or any(s['stroke_index'] != i or s['point_range'] != offsets[i:i+2].tolist()
                                       for i,s in enumerate(stroke_map)):
             raise ValueError(sid+': metadata and actual trajectory offsets differ')
-        masks = []
+        masks = []; stroke_pngs = []
         with np.load(io.BytesIO(data['masks_key']), allow_pickle=False) as z:
             for i in range(n):
                 name = 'stroke%03d.png' % i
@@ -95,13 +98,20 @@ class StrokeCatalog:
                 if not mask.any():
                     raise ValueError(sid+': empty '+name)
                 masks.append(mask)
+                stroke_pngs.append(png)
         result = image, points, offsets, np.stack(masks)
         self.cached_id, self.cached_assets = sid, result
+        self.cached_stroke_pngs = np.stack(stroke_pngs)
         return result
+
+    def stroke_png(self, sid, stroke_index):
+        """Return stored decoded pixels exactly; foreground threshold is not applied."""
+        self.character_assets(sid)
+        return self.cached_stroke_pngs[stroke_index].copy()
 
 
 def masked_stroke_image(image, mask):
-    """Shared GT/predicted-mask input construction; mask is bool or probability."""
+    """Future stage-one inference adapter; not used for stored-PNG training."""
     if image.shape != (256, 256) or mask.shape != image.shape:
         raise ValueError('image and mask must share a 256x256 canvas')
     if not np.isfinite(mask).all():
@@ -140,11 +150,11 @@ class SingleStrokeDataset(Dataset):
 
     def __getitem__(self, index):
         sid, k = self.key(index)
-        image, points, offsets, masks = self.catalog.character_assets(sid)
+        _, points, offsets, _ = self.catalog.character_assets(sid)
+        stroke = self.catalog.stroke_png(sid, k)
         points = points[offsets[k]:offsets[k+1]].copy()
         if not 1 <= len(points) <= self.max_points:
             raise ValueError(sid+': actual points exceed cap; no truncation')
-        mask = masks[k]
         transform = np.eye(3, dtype=np.float32)
         if self.augment:
             scale = float(torch.empty(()).uniform_(.9, 1.))
@@ -153,16 +163,14 @@ class SingleStrokeDataset(Dataset):
                                                     min(3.,255.-float(xy[:,a].max())))) for a in range(2)]
             transform[:2,:2] *= scale
             transform[:2,2] = (1-scale)*127.5+np.array(shift)
-            image = cv2.warpAffine(image, transform[:2], (256,256), flags=cv2.INTER_LINEAR, borderValue=255)
-            mask = cv2.warpAffine(mask.astype(np.uint8), transform[:2], (256,256), flags=cv2.INTER_NEAREST).astype(bool)
+            stroke = cv2.warpAffine(stroke, transform[:2], (256,256), flags=cv2.INTER_LINEAR, borderValue=255)
             points[:,:2] = points[:,:2] @ transform[:2,:2].T + transform[:2,2]
             points[:,2] *= scale
-        stroke = masked_stroke_image(image, mask)
         points[:,:2] /= 255.
         points[:,2] /= 256.
         return dict(image=torch.from_numpy(stroke.astype(np.float32)[None]/255.),
                     points=torch.from_numpy(points), sample_id=sid, stroke_index=k,
-                    character=self.catalog.rows[sid]['character'], split=self.split,
+                    character=self.catalog.rows[sid]['character'], split=self.split, input_protocol=INPUT_PROTOCOL,
                     transform=torch.from_numpy(transform))
 
 

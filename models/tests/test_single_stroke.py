@@ -27,6 +27,7 @@ def fixture(root):
             rows.append(row);assets[row['image_key']]=cv2.imencode('.png',image)[1].tobytes()
             buf=io.BytesIO();np.savez(buf,points=p,stroke_offsets=off,image_size=256);assets[row['trajectory_key']]=buf.getvalue()
             mask=np.full((256,256),255,np.uint8);mask[20:80,20:80]=0
+            mask[25,25]=96;mask[26,26]=180  # Preserve decoded values, not a thresholded reconstruction.
             png=cv2.imencode('.png',mask)[1]
             buf=io.BytesIO();np.savez(buf,**{'stroke000.png':png,'stroke001.png':png});assets[row['masks_key']]=buf.getvalue()
     db=root/'db';db.mkdir()
@@ -50,7 +51,15 @@ class DataTests(unittest.TestCase):
                     sets.append({ds.key(i)[0] for i in range(len(ds))})
                     s=ds[1];self.assertEqual(s['points'].shape,(3,3))
                     self.assertEqual(float(s['image'][0,100,100]),1.)
-                    self.assertAlmostEqual(float(s['image'][0,40,40]),40/255.)
+                    self.assertEqual(float(s['image'][0,40,40]),0.)
+                    self.assertAlmostEqual(float(s['image'][0,25,25]),96/255.)
+                    self.assertAlmostEqual(float(s['image'][0,26,26]),180/255.)
+                    sid,k=ds.key(1)
+                    with catalog._env().begin() as txn:
+                        raw=txn.get(catalog.rows[sid]['masks_key'].encode())
+                    with np.load(io.BytesIO(raw)) as z:
+                        stored=cv2.imdecode(z['stroke%03d.png'%k],cv2.IMREAD_GRAYSCALE)
+                    np.testing.assert_array_equal(np.rint(s['image'][0].numpy()*255).astype(np.uint8),stored)
                     batch=collate_single_strokes([ds[0],s])
                     self.assertEqual(batch['valid'].tolist(),[[False,False,False],[True,True,False]])
                     self.assertTrue(torch.equal(batch['targets'][1,0],s['points'][1]))
@@ -66,6 +75,13 @@ class DataTests(unittest.TestCase):
                 np.testing.assert_allclose(aug['points'].numpy()[:,:2]*255,expected,atol=1e-4)
                 np.testing.assert_allclose(aug['points'].numpy()[:,2]*256,raw[:,2]*matrix[0,0],atol=1e-4)
             finally:catalog.close()
+
+    def test_predicted_mask_adapter_is_separate(self):
+        image=np.full((256,256),60,np.uint8);mask=np.zeros((256,256),np.float32)
+        mask[20:40,20:40]=.8
+        result=masked_stroke_image(image,mask)
+        self.assertEqual(int(result[30,30]),60)
+        self.assertEqual(int(result[50,50]),255)
 
 
 class ModelTests(unittest.TestCase):
@@ -126,6 +142,15 @@ class ModelTests(unittest.TestCase):
 
 
 class TrainingIntegrationTests(unittest.TestCase):
+    def test_legacy_input_checkpoint_rejected(self):
+        from models.networks.single_stroke import MODE
+        from models.training.single_stroke import load_model
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/'legacy.pt'
+            torch.save(dict(training_mode=MODE),path)
+            with self.assertRaisesRegex(ValueError,'input protocol'):
+                load_model(path,'cpu')
+
     def test_resume_matches_uninterrupted_training(self):
         import subprocess
         import sys

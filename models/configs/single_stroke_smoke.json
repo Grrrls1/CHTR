@@ -2,7 +2,7 @@
   "training_mode": "single_stroke_xy_width_v1",
   "dataset": "data/chtr_mmah_lmdb",
   "split_file": "models/data_splits/full_character_v1.json",
-  "output_dir": "models/runs/single_stroke_smoke_v1/train",
+  "output_dir": "models/runs/single_stroke_png_smoke_v2/train",
   "seed": 42,
   "device": "auto",
   "threads": 2,
@@ -26,5 +26,6 @@
     "decoder_layers": 4,
     "max_points": 4096,
     "dropout": 0.0
-  }
+  },
+  "input_protocol": "stored_stroke_png_v2"
 }

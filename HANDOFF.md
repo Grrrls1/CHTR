@@ -11,7 +11,7 @@
 已实现独立单笔轨迹阶段和固定划分接入，完成本机CPU smoke、小集训练与全量数据接口审核。
 有序笔画阶段和两阶段串联尚未实现；未启动正式全库训练。
 当前实现、命令和差异见 [单笔阶段说明](models/SINGLE_STROKE.md)，验证摘要见
-[本机smoke记录](models/reports/single_stroke_smoke_20261023.json)。
+[PNG输入smoke记录](models/reports/single_stroke_png_smoke_20261023.json)。
 不生成或提交 Slurm 文件，除非用户后续明确要求。
 
 ## 必须保留的 job237 基线
@@ -63,8 +63,10 @@ teacher-forced点历史，首版必须同时预测XY、宽度和点有效性。
 宽度epsilon=0.01/256，减去epsilon偏置，各项先每笔平均再对笔平均。
 无效结束位置只算BCE，首点和padding不算几何损失。第一阶段后续共用单位与导出转换。
 首点与后续点宽度误差应分别报告。
-单笔视觉输入为mask区域内的原图内容，区域外填白，保留位置并形成256×256画布；
-训练使用真实mask，推理使用预测mask提取同一原图内容，不直接把二值mask当第二阶段图像。
+训练、验证和真实笔画条件评估直接读取库内256×256的strokeXXX.png，解码归一化，
+不开增强时逐像素保留，不再用它作为mask二次截取整字原图。PNG来源是清理后的笔画mask导出。
+完整推理才用笔画层预测mask提取规范化原图内容，区域外填白，保留画布位置；接口已保留，串联待实现。
+当前输入协议stored_stroke_png_v2写入配置、checkpoint和签名，旧输入权重拒绝误续训/评估。
 原图必须映射到轨迹对应的规范化画布，不能直接混用original_image_key与image_key坐标。
 跨阶段传单笔图像和预测起点，不是将第一阶段隐藏z直接作为第二阶段条件。
 预测起点实际作为轨迹第一点；预测终点首版只做第一阶段辅助监督。
@@ -88,11 +90,12 @@ image_key是规范化图片，original_image_key是另一份原始书法图；�
 ## 下一次接手的第一步
 
 1. 读主TODO和单笔阶段说明，不继续旧计划；未明确的论文实现细节仍需核验。
-2. 单笔阶段代码、训练/条件评估入口已实现，不重复新建；小集产物在
-   `models/runs/single_stroke_smoke_v1/`，其中`fit_single_representative`为48点单笔128步拟合，
-   `fit_multi_coverage`为8笔32步，`fixed32_epoch1`为32字334笔一轮训练。
-3. 10项测试通过，包含增强与dropout下中途恢复逐参数一致、因果性、padding、停止与导出。
-   48点单笔自由解码输出48点并正常停止；这是真实mask/首点条件下的训练样本拟合。
+2. 单笔阶段代码、训练/条件评估入口已实现，不重复新建；当前直接PNG输入产物在
+   `models/runs/single_stroke_png_smoke_v2/`，其中`fit_single`为48点单笔128步拟合，
+   `train`为8笔4步，`fixed32_epoch1`为32字334笔一轮训练。
+   `models/runs/single_stroke_smoke_v1/`及旧报告对应mask截原图输入，仅供历史查阅。
+3. 12项测试通过，包含PNG原像素保留、增强与dropout下中途恢复一致、因果性、padding、
+   停止与导出、旧输入checkpoint拒绝；本次在三个集合各64张共2,011笔上复查直接PNG输入。
 4. 全量实际读取71,457张整字、727,997笔，最长393点；取整中心点均在对应mask内。
    train/val/test展开笔数与清单一致；test只检查资产，不用于模型选择。
 5. 本机CUDA不可用。固定32字充分拟合、留出自由解码质量和GPU容量尚待验收，

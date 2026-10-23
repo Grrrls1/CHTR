@@ -590,5 +590,8 @@
     "Full audit validates assets and rounded-point geometry, not human writing authenticity.",
     "Test assets checked without model scoring or model selection.",
     "Runs/weights/NPZ/HTML are ignored by git; this summary and source are versionable."
-  ]
+  ],
+  "status": "historical_masked_original_input",
+  "superseded_by": "models/reports/single_stroke_png_smoke_20261023.json",
+  "note": "Previous training/decoding metrics belong to mask-times-original inputs. Asset audit remains valid; do not treat old weights as current direct-PNG training."
 }
