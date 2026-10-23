@@ -1,11 +1,15 @@
 # 书法图像到书写轨迹模型
 
+> 当前唯一计划：参考论文实施“有序笔画预测 → 单笔轨迹生成”，见 [TODO](TODO.md) 和 [HANDOFF](../HANDOFF.md)。
+> 保留 job237 基线。此前 free rollout、三任务AR和扩散后续计划已放弃；下方相关实现与命令仅作历史参考。
+> 新两阶段方法尚未实现或启动训练。
+
 本目录实现 LMDB 数据适配、图像编码、有序笔画解码、逐点轨迹生成与多任务训练。
 输入为单张灰度书法图像，输出按书写顺序排列的笔画轨迹。模型结构见
 [ARCHITECTURE.md](ARCHITECTURE.md)，1915 数据集从头初始化的自由训练见
 [FREE_ROLLOUT.md](FREE_ROLLOUT.md)。
 
-## 新增：三个主任务的独立自回归基线
+## 历史实现：三个主任务的独立自回归基线（后续计划已放弃）
 
 实现入口：[train_hierarchical_ar.py](scripts/train_hierarchical_ar.py)，配置：
 [hierarchical_ar.json](configs/hierarchical_ar.json)，完整说明：[HIERARCHICAL_AR.md](HIERARCHICAL_AR.md)。

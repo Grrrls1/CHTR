@@ -1,5 +1,9 @@
 # 1915 数据集从头初始化的 free rollout 训练
 
+> 状态：此路线的全部后续待办已被用户放弃，仅保留历史实现说明。
+> 当前唯一计划见 [TODO.md](TODO.md)，交接见 [HANDOFF.md](../HANDOFF.md)。
+> 下方旧运行命令不代表当前应继续或提交的工作。
+
 统一入口：`scripts/train_free_rollout.py`；配置：`configs/free_rollout.json`。
 保留 teacher-forced 代码作为原有实现；本说明描述 1915 全集上的独立 free rollout 训练。
 
