@@ -116,17 +116,22 @@ class SingleStrokeModel(nn.Module):
             raise ValueError('first_points must be finite Bx3 XYZ')
         if (first_points[:,:2]<0).any() or (first_points[:,:2]>1).any() or (first_points[:,2]<=0).any():
             raise ValueError('invalid normalized first point')
-        memory=self.visual(images);results=[]
-        for i,first in enumerate(first_points):
-            points=first[None].clone(); visual=[m[i:i+1] for m in memory]
-            while True:
-                output=self.decode(visual,points[None],torch.ones(1,len(points),device=points.device,dtype=torch.bool))
-                probability=float(output['valid_logits'][0,-1].sigmoid())
-                if probability<threshold:
-                    reason='invalid';break
-                if len(points)>=cap:
-                    reason='point_cap';break
-                points=torch.cat([points,output['points'][0,-1:]],dim=0)
-            results.append(dict(points=points,stop_reason=reason,terminated=reason=='invalid',
-                                truncated=reason=='point_cap',next_validity=probability))
+        memory=self.visual(images)
+        live=torch.arange(len(images),device=images.device)
+        points=first_points[:,None].clone();results=[None]*len(images)
+        while len(live):
+            visual=[m.index_select(0,live) for m in memory]
+            output=self.decode(visual,points,torch.ones(points.shape[:2],device=points.device,dtype=torch.bool))
+            probabilities=output['valid_logits'][:,-1].sigmoid()
+            stopped=probabilities<threshold
+            capped=torch.full_like(stopped,points.shape[1]>=cap)
+            finished=stopped|capped
+            for j in finished.nonzero(as_tuple=False).flatten().tolist():
+                reason='invalid' if bool(stopped[j]) else 'point_cap'
+                results[int(live[j])]=dict(points=points[j].clone(),stop_reason=reason,
+                    terminated=reason=='invalid',truncated=reason=='point_cap',next_validity=float(probabilities[j]))
+            keep=(~finished).nonzero(as_tuple=False).flatten()
+            if not len(keep):break
+            points=torch.cat([points.index_select(0,keep),output['points'][:,-1:].index_select(0,keep)],dim=1)
+            live=live.index_select(0,keep)
         return results

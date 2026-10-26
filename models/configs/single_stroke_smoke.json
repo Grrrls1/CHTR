@@ -11,8 +11,6 @@
   "max_steps": 4,
   "train_char_limit": 32,
   "train_stroke_limit": 8,
-  "eval_strokes": 2,
-  "eval_every_steps": 4,
   "augment": false,
   "learning_rate": 0.0001,
   "weight_decay": 0.0,
@@ -24,7 +22,15 @@
     "heads": 4,
     "encoder_layers": 1,
     "decoder_layers": 4,
-    "max_points": 4096,
+    "max_points": 400,
     "dropout": 0.0
-  }
+  },
+  "evaluation_protocol": "full_split_free_v2",
+  "eval_every_epochs": 1,
+  "eval_batch_size": 2,
+  "visualize_characters": 2,
+  "decode_max_points": 400,
+  "validity_threshold": 0.5,
+  "final_test": false,
+  "checkpoint_every": 4
 }

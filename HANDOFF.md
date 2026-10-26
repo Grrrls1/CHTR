@@ -8,11 +8,12 @@
 旧 free rollout、三任务分层 AR、扩散 / Flow Matching 的后续计划全部放弃，
 包括它们的 GPU 调参、正式训练和消融。代码存在或旧文档中有复选框，不代表应继续执行。
 
-已实现独立单笔轨迹阶段和固定划分接入，完成本机CPU smoke、小集训练与全量数据接口审核。
-有序笔画阶段和两阶段串联尚未实现；未启动正式全库训练。
+已实现独立单笔轨迹阶段和固定划分接入，完成迁移前 CPU smoke、小集训练与全量数据接口审核。
+有序笔画阶段和两阶段串联尚未实现；2026-10-26 已提交单笔阶段全量训练job 604（替代已取消的602）。
 当前实现、命令和差异见 [单笔阶段说明](models/SINGLE_STROKE.md)，验证摘要见
 [本机smoke记录](models/reports/single_stroke_smoke_20261023.json)。
-不生成或提交 Slurm 文件，除非用户后续明确要求。
+用户已明确要求后续计算通过Slurm提交，遵循 `/home/lkh/workspace/slurm-jobs/SKILL.md`；
+全量训练入口为 `models/scripts/train_single_stroke_full.slurm`；当前用户要求改完后由其手动提交。
 
 ## 必须保留的 job237 基线
 
@@ -85,6 +86,29 @@ PNG编号与offsets按笔画顺序对应；抽查PNG为256×256白底黑笔画�
 image_key是规范化图片，original_image_key是另一份原始书法图；不要直接混用坐标。
 先按整字划分，再展开笔画；无作者信息不能宣称书家独立验证，检查近重复来源。
 
+## 2026-10-26 本机接入核验
+
+沿用 `third_party/StrokeExtraction/.venv/bin/python`，Python3.10.19、torch2.12.1+cu130、
+torchvision0.27.1+cu130；CUDA不可用。10项划分与单笔测试通过。
+现有 `full_character_v1.json` 与本机完整库元数据指纹一致，直接复用；
+train / val / test 为56,622 / 8,121 / 6,714张、576,465 / 83,119 / 68,413笔。
+记录见 [本机划分核验](models/reports/local_dataset_split_20261026.json)，
+更新后的启动、恢复与评估命令见 [单笔阶段说明](models/SINGLE_STROKE.md)。
+本次未启动正式训练或重跑全量资产解码审核。
+
+## 2026-10-26 全量训练与最新评估协议
+
+历史job604采用batch48、每1000步固定16笔TF验证；其实际配置和产物保留。
+用户最新要求：取消step中途评估，每10个epoch完整评估val、固定30字可视化、增大batch，手动提交。
+当前源码配置为batch96、lr3e-4恒定AdamW、200epoch、max_points=400；checkpoint每100步。
+完整val为83,119笔，批量自由解码只给真实首点和真实mask区域原图，TF仅作辅助报告。
+按自由解码轨迹重绘IoU选best.pt；early stopping patience10计10次评估（约100epoch），min_delta=.001、min_epochs20。
+每轮 `eval_total_epoch_010/` 等目录保存完整summary、全笔strokes.jsonl及固定30个val字的整字/逐笔PNG、NPZ和宽度曲线HTML。
+正常训练结束/早停后加载best.pt完整test一次，输出test_best/，test不参与模型选择。
+入口 `models/scripts/train_single_stroke_full.slurm`，单卡、4 CPU、32G、3天；输出按Slurm job ID独立。
+本次不自动提交或取消旧作业；旧batch/评估协议的checkpoint不能直接resume新配置。
+CPU合成夹具16项测试通过；未做batch96 GPU容量测试或实际全库自由评估。
+
 ## 下一次接手的第一步
 
 1. 读主TODO和单笔阶段说明，不继续旧计划；未明确的论文实现细节仍需核验。
@@ -99,4 +123,4 @@ image_key是规范化图片，original_image_key是另一份原始书法图；�
    之后实施有序笔画阶段（含u_k首点宽度头）和串联评估。
 
 数据和训练资产被Git忽略；服务器仅git pull不会自动获得LMDB、权重或本地评估。
-仓库当前路径是`/home/lkh/vscode/CHTR`，不要使用已迁移前的epoch100_bundle路径执行命令。
+仓库当前路径是`/home/lkh/workspace/CHTR`，不要使用已迁移前的epoch100_bundle路径执行命令。

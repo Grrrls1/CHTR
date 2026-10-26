@@ -124,8 +124,97 @@ class ModelTests(unittest.TestCase):
             a=self.model(self.images,self.history,self.active);b=other(self.images,self.history,self.active)
         torch.testing.assert_close(a['points'],b['points'],rtol=0,atol=0)
 
+    def test_batched_generation_matches_individual(self):
+        self.model.eval()
+        first=self.history[:,0]
+        with torch.no_grad():self.model.valid_head.weight.zero_();self.model.valid_head.bias.fill_(20)
+        batch=self.model.generate(self.images,first,max_points=4)
+        for i,result in enumerate(batch):
+            single=self.model.generate(self.images[i:i+1],first[i:i+1],max_points=4)[0]
+            torch.testing.assert_close(result['points'],single['points'],rtol=1e-5,atol=1e-6)
+            self.assertEqual(result['stop_reason'],single['stop_reason'])
+        original_decode=self.model.decode
+        def mixed_decode(memory,history,active):
+            out=original_decode(memory,history,active)
+            lengths=torch.where(history[:,0,0]<.5,2,3)
+            out['valid_logits'][:,-1]=torch.where(lengths<=history.shape[1],-20.,20.)
+            return out
+        self.model.decode=mixed_decode
+        first[0,0]=.2;first[1,0]=.8
+        mixed=self.model.generate(self.images,first,max_points=4)
+        self.assertEqual([len(r['points']) for r in mixed],[2,3])
+        self.assertTrue(all(r['terminated'] for r in mixed))
+        for i,result in enumerate(mixed):torch.testing.assert_close(result['points'][0],first[i])
+
+
+class EvaluationTests(unittest.TestCase):
+    def test_full_split_free_metrics_and_fixed_character_gallery(self):
+        from models.training.single_stroke_evaluation import evaluate_split,visualization_ids
+        class FirstOnly(torch.nn.Module):
+            max_points=4
+            def forward(self,images,history,active):
+                return dict(points=torch.zeros_like(history),valid_logits=torch.zeros_like(active,dtype=torch.float32))
+            def generate(self,images,first_points,max_points,threshold):
+                # This signature deliberately accepts no GT points or lengths.
+                return [dict(points=p[None].clone(),terminated=True,truncated=False,stop_reason='invalid') for p in first_points]
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);db,split=fixture(root);catalog=StrokeCatalog(db,split)
+            try:
+                val=SingleStrokeDataset(catalog,'val',max_points=4)
+                fixed=visualization_ids(val,30)
+                self.assertEqual(len(fixed),2)
+                self.assertEqual(fixed,visualization_ids(val,30))
+                c=dict(eval_batch_size=3,decode_max_points=4,validity_threshold=.5,width_weight=1.,valid_weight=.2,
+                       model=dict(max_points=4))
+                model=FirstOnly().train()
+                for name in ('first','second'):
+                    report=evaluate_split(model,val,'cpu',c,root/name,fixed)
+                    self.assertTrue(model.training)
+                    self.assertTrue(report['full_split']);self.assertEqual(report['strokes'],4)
+                    self.assertEqual(report['visualization_ids'],fixed)
+                    self.assertEqual(report['free']['terminated_rate'],1.)
+                    self.assertEqual(report['free']['point_count_mae'],1.)
+                    self.assertEqual(report['visualized_characters'],2)
+                    self.assertEqual(len(list((root/name).rglob('*.npz'))),4)
+                    self.assertEqual(len((root/name/'strokes.jsonl').read_text().splitlines()),4)
+                    self.assertTrue(all((root/name/sid/'index.html').exists() for sid in fixed))
+            finally:catalog.close()
+
 
 class TrainingIntegrationTests(unittest.TestCase):
+    def test_epoch_only_validation_and_final_full_test(self):
+        import subprocess
+        import sys
+        root=Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp=Path(tmp);db,split=fixture(tmp)
+            config=json.loads((root/'models/configs/single_stroke_smoke.json').read_text())
+            config.update(dataset=str(db),split_file=str(split),epochs=2,train_char_limit=0,train_stroke_limit=0,
+                          eval_every_epochs=2,decode_max_points=4,threads=2,final_test=True,checkpoint_every=1)
+            config['model'].update(dim=16,max_points=8)
+            path=tmp/'config.json';path.write_text(json.dumps(config));output=tmp/'run'
+            cmd=[sys.executable,str(root/'models/scripts/train_single_stroke.py'),'--config',str(path),
+                 '--output-dir',str(output),'--device','cpu']
+            subprocess.run(cmd+['--max-steps','1'],cwd=root,check=True,capture_output=True,text=True)
+            self.assertFalse(list(output.glob('eval_total_epoch_*')))
+            self.assertFalse((output/'best.pt').exists())
+            subprocess.run(cmd+['--resume',str(output/'last.pt'),'--max-steps','0'],cwd=root,check=True,capture_output=True,text=True)
+            validations=[r for r in map(json.loads,(output/'metrics.jsonl').read_text().splitlines()) if r['kind']=='validation']
+            self.assertEqual([r['epoch'] for r in validations],[2])
+            self.assertEqual(validations[0]['strokes'],4)
+            self.assertTrue(validations[0]['full_split'])
+            usage=json.loads((output/'data_usage.json').read_text())
+            gallery=json.loads((output/'eval_total_epoch_002/summary.json').read_text())
+            self.assertEqual(usage['visualization_ids'],gallery['visualization_ids'])
+            test=json.loads((output/'test_best/summary.json').read_text())
+            self.assertEqual(test['split'],'test');self.assertEqual(test['strokes'],4)
+            self.assertTrue(test['full_split']);self.assertFalse(test['test_used_for_model_selection'])
+            self.assertEqual(test['checkpoint_epoch'],2)
+            test_mtime=(output/'test_best/summary.json').stat().st_mtime_ns
+            subprocess.run(cmd+['--resume',str(output/'last.pt'),'--max-steps','0'],cwd=root,check=True,capture_output=True,text=True)
+            self.assertEqual((output/'test_best/summary.json').stat().st_mtime_ns,test_mtime)
+            self.assertEqual(len(list(output.glob('eval_total_epoch_*'))),1)
+
     def test_resume_matches_uninterrupted_training(self):
         import subprocess
         import sys
@@ -134,7 +223,9 @@ class TrainingIntegrationTests(unittest.TestCase):
             tmp=Path(tmp);db,split=fixture(tmp)
             config=json.loads((root/'models/configs/single_stroke_smoke.json').read_text())
             config.update(dataset=str(db),split_file=str(split),epochs=10,train_char_limit=0,
-                          train_stroke_limit=0,eval_strokes=1,eval_every_steps=100,threads=2,augment=True)
+                          train_stroke_limit=0,eval_every_epochs=1,threads=2,augment=True,decode_max_points=4,final_test=False,
+                          optimizer='adamw',cosine_steps=0,checkpoint_every=1,
+                          early_stopping=dict(patience=1,min_delta=1.e6,min_epochs=2))
             config['model'].update(dim=16,max_points=8,dropout=.1)
             path=tmp/'config.json';path.write_text(json.dumps(config))
             def run(output,steps,resume=None):
@@ -149,6 +240,13 @@ class TrainingIntegrationTests(unittest.TestCase):
                 torch.testing.assert_close(value,b['model'][key],rtol=0,atol=0)
             self.assertEqual((a['step'],a['epoch'],a['cursor']),(b['step'],b['epoch'],b['cursor']))
             self.assertEqual(a['scheduler'],b['scheduler'])
+            self.assertEqual(a['early_stopping'],b['early_stopping'])
+            for output in (full,partial):
+                status=json.loads((output/'training_status.json').read_text())
+                self.assertEqual(status['reason'],'early_stopping')
+                self.assertEqual(status['epoch'],2)
+                self.assertEqual(status['early_stopping']['bad_epochs'],1)
+                self.assertEqual(status['early_stopping_monitor'],'1-free_trajectory_iou')
             output=tmp/'export'
             subprocess.run([sys.executable,str(root/'models/scripts/evaluate_single_stroke.py'),
                             '--checkpoint',str(full/'last.pt'),'--output',str(output),'--split','val',
@@ -156,9 +254,10 @@ class TrainingIntegrationTests(unittest.TestCase):
                            stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
             report=json.loads((output/'summary.json').read_text())
             self.assertEqual(report['split'],'val')
-            self.assertTrue(report['samples'][0]['first_xyz_exact'])
+            self.assertEqual(report['strokes'],1)
+            self.assertTrue(json.loads((output/'strokes.jsonl').read_text().splitlines()[0])['first_xyz_exact'])
             self.assertTrue((output/'index.html').exists())
-            self.assertEqual(len(list(output.glob('*.npz'))),1)
+            self.assertEqual(len(list(output.rglob('*.npz'))),1)
 
 
 if __name__=='__main__':unittest.main()

@@ -1,4 +1,4 @@
-"""Shared stage-two setup, fixed subset selection and teacher-forced evaluation."""
+"""Shared stage-two setup, fixed subset selection and checkpoint loading."""
 import hashlib
 import json
 from pathlib import Path
@@ -6,8 +6,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from models.datasets.single_stroke import StrokeCatalog, SingleStrokeDataset, collate_single_strokes
-from models.losses.single_stroke import single_stroke_loss
+from models.datasets.single_stroke import StrokeCatalog, SingleStrokeDataset
 from models.networks.single_stroke import SingleStrokeModel, MODE
 
 ROOT=Path(__file__).resolve().parents[2]
@@ -44,8 +43,8 @@ def make_data(config):
         count=min(config['train_stroke_limit'],len(ordered))
         positions=[len(ordered)//2] if count==1 else np.linspace(0,len(ordered)-1,count,dtype=int)
         indices=[ordered[int(i)] for i in positions]
-    count=min(config['eval_strokes'],len(val))
-    val_indices=[int(i) for i in np.linspace(0,len(val)-1,count,dtype=int)]
+    # Model selection always covers the full held-out split.
+    val_indices=range(len(val))
     return catalog,train,val,indices,val_indices
 
 
@@ -54,19 +53,6 @@ def signature(config,catalog):
     payload=dict(config=settings,dataset_fingerprint=catalog.fingerprint,
                  splits={n:catalog.split[n+'_ids'] for n in ('train','val','test')})
     return hashlib.sha256(json.dumps(payload,sort_keys=True).encode()).hexdigest()
-
-
-@torch.no_grad()
-def evaluate(model,dataset,indices,device,config):
-    was_training=model.training;model.eval();totals={}
-    for start in range(0,len(indices),config['batch_size']):
-        samples=[dataset[i] for i in indices[start:start+config['batch_size']]]
-        batch=to_device(collate_single_strokes(samples),device)
-        output=model(batch['images'],batch['history'],batch['active'])
-        _,terms=single_stroke_loss(output,batch,config['width_weight'],config['valid_weight'])
-        for k,v in terms.items():totals[k]=totals.get(k,0.)+float(v)*len(samples)
-    model.train(was_training)
-    return {k:v/len(indices) for k,v in totals.items()}
 
 
 def load_model(checkpoint,device):

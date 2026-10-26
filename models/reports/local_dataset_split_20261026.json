@@ -1,0 +1,47 @@
+{
+  "date": "2026-10-26",
+  "dataset": "data/chtr_mmah_lmdb",
+  "split_file": "models/data_splits/full_character_v1.json",
+  "interpreter": "third_party/StrokeExtraction/.venv/bin/python",
+  "dataset_fingerprint": "124790ac1671c8892db829c7d611c35d80171142e81b46fe469a48f6535f3563",
+  "selection": {
+    "total": 73606,
+    "ready": 71457,
+    "quality_excluded": 0
+  },
+  "summary": {
+    "train": {
+      "samples": 56622,
+      "strokes": 576465
+    },
+    "val": {
+      "samples": 8121,
+      "strokes": 83119
+    },
+    "test": {
+      "samples": 6714,
+      "strokes": 68413
+    }
+  },
+  "characters": 5608,
+  "coverage_exceptions": 615,
+  "validation": "PASS: metadata fingerprint, ID partition, group isolation, character coverage, stroke counts",
+  "note": "Reused existing immutable manifest; no LMDB mutation or split regeneration. Metadata validation only, not full asset scan.",
+  "seconds": 199.65906420600368,
+  "environment": {
+    "python": "3.10.19",
+    "torch": "2.12.1+cu130",
+    "torchvision": "0.27.1+cu130",
+    "numpy": "1.23.5",
+    "Pillow": "9.5.0",
+    "opencv_python_headless": "3.4.18.65",
+    "lmdb": "3.0.0",
+    "cuda_available": false
+  },
+  "tests": {
+    "command": "TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 third_party/StrokeExtraction/.venv/bin/python -m unittest models.tests.test_dataset_split models.tests.test_single_stroke -v",
+    "passed": 10,
+    "seconds": 18.588,
+    "scope": "Synthetic fixtures, including resume and export; not full dataset training."
+  }
+}
