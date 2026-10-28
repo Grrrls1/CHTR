@@ -25,7 +25,7 @@
 | 仓库路径 | `/home/lkh/vscode/CHTR` |
 | 系统 | Linux 桌面环境；发行版、版本待补充 |
 | GPU 数量 | 当前输出显示1张，编号0 |
-| GPU 型号 | NVIDIA GeForce RTX 4060；输出末尾被截断，完整型号后缀未确认 |
+| GPU 型号 | NVIDIA GeForce RTX 4060 Laptop GPU（本机CUDA实测确认） |
 | GPU 总显存 | 8,188 MiB，约8 GiB |
 | NVIDIA 驱动 | 595.99.02 |
 | NVIDIA-SMI 版本 | 595.99.02 |
@@ -33,29 +33,25 @@
 | GPU 状态 | 驱动识别正常，桌面正在使用 GPU |
 | 测量时显存占用 | 898 MiB / 8,188 MiB；仅为当时快照，不是固定可用显存 |
 | 桌面进程 | Xorg、gnome-shell、VS Code、Firefox 等 |
-| 实际评估 Python 环境 | 待确认并补充；与下列历史解释器记录区分 |
-| 实际评估环境的 torch / torchvision | 待补充 |
-| 实际评估环境的 `torch.version.cuda` | 待补充 |
-| 实际评估环境的 CUDA 可用性 | 以该环境在本机终端的实际检测为准 |
+| 实际评估 Python 环境 | Conda `test`：`/home/lkh/anaconda3/envs/test/bin/python` |
+| 实际评估环境的 torch / torchvision | 1.13.0 / 0.14.0 |
+| 实际评估环境的 `torch.version.cuda` | 11.7；`torch.backends.cuda.is_built()`为True |
+| 实际评估环境的 CUDA 可用性 | 2026-10-28沙箱外实测True，RTX4060小型CUDA前向/反向通过 |
 
-### 已有解释器检测记录
+### 本机与服务器的记录归属
 
-本会话工具曾使用 `/home/lkh/anaconda3/envs/test/bin/python`，得到：
+用户澄清：10月23日CPU smoke是在个人电脑上执行，使用Conda `test`；
+10月26日的环境/划分核验、job605训练及其environment.json均来自服务器，使用StrokeExtraction环境。
+不能将服务器上的 `.venv` 路径要求套用到个人电脑。
 
-| 项目 | 检测值 |
-| --- | --- |
-| PyTorch | 1.13.0 |
-| torchvision | 0.14.0 |
-| `torch.cuda.is_available()` | False |
+2026-10-28重新检查Conda `test`：PyTorch是CUDA11.7构建，并非CPU-only包。
+会话沙箱内CUDA不可见，但在沙箱外识别到RTX4060 Laptop GPU，实际CUDA张量前向、反向及同步均通过。
+同一Conda环境成功加载job605的best.pt（epoch20、step120100）。
+这验证GPU运行能力与checkpoint加载；尚未据此宣称job605全量GPU测试已经完成。
+记录见 [本机Conda环境核验](reports/local_conda_test_environment_20261028.json)。
 
-此结果仅描述该解释器在当时会话执行环境中的检测情况，不能覆盖上面的本机 GPU / 驱动事实，
-也不表示这是最终选择的测试环境。此前 CPU smoke 结果仍是 CPU 实测，不改写为 GPU 实测。
-
-如需补全实际评估环境，在用户选定的环境中运行一次并将输出记录到上表即可：
-
-```bash
-python -c "import sys, torch, torchvision; print('python:', sys.executable); print('torch:', torch.__version__); print('torchvision:', torchvision.__version__); print('torch CUDA:', torch.version.cuda); print('CUDA available:', torch.cuda.is_available()); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'not visible in this process')"
-```
+此前的 `torch.cuda.is_available() == False` 仅是沙箱内检测结果，不是本机环境的最终CUDA结论。
+后续个人电脑直接使用上表的Conda解释器；服务器继续使用下文StrokeExtraction解释器。
 
 job605 的本机测试操作见 [TEST_README](TEST_README.md)。使用 GPU 评估时指定
 `--device cuda:0`，batch 大小按本机实测显存调整；尚无本机完整测试的显存容量验收结论。

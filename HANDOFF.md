@@ -4,6 +4,8 @@
 
 个人电脑与服务器配置统一见 [ENVIRONMENT](models/ENVIRONMENT.md)，后续先读该文件，
 不重复要求用户说明已记录的 CUDA / GPU 配置。
+用户已澄清：个人电脑10月23日CPU smoke使用Conda `test`，当前GPU test也可使用该环境；10月26日及job605的StrokeExtraction环境记录属于服务器。
+2026-10-28沙箱外实测本机Conda test的CUDA前向/反向通过，job605 checkpoint加载通过；后续按ENVIRONMENT选择机器对应的解释器。
 2026-10-28 用户确认个人电脑为 RTX 4060、8,188 MiB 显存、驱动595.99.02，
 `nvidia-smi`显示CUDA Version 13.2；服务器环境待用户补充。
 某个Python环境返回CUDA不可用不代表个人电脑没有GPU，须区分机器、解释器与执行环境。

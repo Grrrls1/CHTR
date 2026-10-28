@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-28",
+  "machine": "personal_computer",
+  "interpreter": "/home/lkh/anaconda3/envs/test/bin/python",
+  "torch": "1.13.0",
+  "torchvision": "0.14.0",
+  "torch_cuda_build": "11.7",
+  "cuda_build": true,
+  "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+  "outside_sandbox": {
+    "cuda_available": true,
+    "cuda_forward_backward": "PASS",
+    "test": "32x32 CUDA tensor square mean, backward, synchronize"
+  },
+  "inside_sandbox": {
+    "cuda_available": false,
+    "device_count": 0,
+    "note": "Device visibility restriction; does not negate outside-sandbox GPU success."
+  },
+  "job605_checkpoint": {
+    "path": "models/runs/single_stroke_full/job_605/train/best.pt",
+    "load_device": "cpu",
+    "load": "PASS",
+    "epoch": 20,
+    "step": 120100
+  },
+  "full_gpu_model_evaluation": "not run in this check"
+}

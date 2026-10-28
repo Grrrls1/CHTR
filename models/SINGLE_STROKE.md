@@ -30,7 +30,7 @@ mask 与首点 `(x,y,width)`，不能当作完整 image-only 推理或训练收�
 清单以全部 ready 样本为候选，无额外 IoU 筛选，seed=42，目标比例80% / 10% / 10%；
 字符分层、来源及重复组约束决定实际数量。验证集用于模型选择，测试集保留到最终验收。
 
-2026-10-26 已使用 `third_party/StrokeExtraction/.venv/bin/python` 核验本机 LMDB，
+2026-10-26 已使用 `third_party/StrokeExtraction/.venv/bin/python` 核验服务器 LMDB，
 与现有 v1 清单的候选元数据指纹一致；ID互斥、覆盖、重复组隔离、字符分布及展开笔画数均通过。
 直接复用此清单，未重新抽样或拆分 LMDB。结果见
 [本机核验记录](reports/local_dataset_split_20261026.json)。
@@ -62,17 +62,19 @@ XY与宽度只监督第二点之后的有效点；宽度误差采用归一化单
 全库实测最长393点，没有静默截断。batch96尚未做GPU容量实测，可按实际峰值调整。
 smoke配置使用dim32、视觉encoder1层，但仍保留ResNet18和四尺度4层点解码。
 
-## 本机运行
+## 服务器运行环境
 
-本机仓库为 `/home/lkh/workspace/CHTR`，解释器为
+个人电脑10月23日CPU smoke与当前GPU test使用Conda `test`，见[环境记录](ENVIRONMENT.md)。下列路径及10月26日记录均属于服务器。
+
+服务器仓库为 `/home/lkh/workspace/CHTR`，解释器为
 `/home/lkh/workspace/CHTR/third_party/StrokeExtraction/.venv/bin/python`（沿用 StrokeExtraction 环境）。
 2026-10-26 实测：Python 3.10.19、torch 2.12.1+cu130、torchvision 0.27.1+cu130、
 NumPy 1.23.5、Pillow 9.5.0、opencv-python-headless 3.4.18.65、lmdb 3.0.0。
 工具沙箱内CUDA不可见；Slurm分配GPU后已确认RTX5090和CUDA13.0前向/反向可用。
 系统默认 Python 位于 miniconda3，未安装训练依赖，请使用上述独立环境。
-该环境已含本阶段所需依赖，无需另外安装整套 requirements 或升级现有 torch / OpenCV。
-`requirements-single-stroke.txt` 是通用安装参考；本机现存 OpenCV 版本低于其声明的4.5，
-是否可用以本机测试与数据接入核验为准。
+该服务器环境已含本阶段所需依赖，无需另外安装整套 requirements 或升级现有 torch / OpenCV。
+`requirements-single-stroke.txt` 是通用安装参考；服务器现存 OpenCV 版本低于其声明的4.5，
+是否可用以服务器测试与数据接入核验为准。
 
 以下命令从仓库根目录执行。计算作业遵循
 [workspace Slurm skill](/home/lkh/workspace/slurm-jobs/SKILL.md)。用户要求手动提交，本次没有提交或取消作业。
