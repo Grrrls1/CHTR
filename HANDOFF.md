@@ -1,136 +1,60 @@
 # CHTR 工作交接
 
-## 环境记录
+更新：2026-10-28。唯一有效计划见 [models/TODO](models/TODO.md)，当前操作见 [models/README](models/README.md)。
+环境统一记录在 [ENVIRONMENT](models/ENVIRONMENT.md)，区分个人电脑与服务器，不重复询问已记录硬件。
 
-个人电脑与服务器配置统一见 [ENVIRONMENT](models/ENVIRONMENT.md)，后续先读该文件，
-不重复要求用户说明已记录的 CUDA / GPU 配置。
-用户已澄清：个人电脑10月23日CPU smoke使用Conda `test`，当前GPU test也可使用该环境；10月26日及job605的StrokeExtraction环境记录属于服务器。
-2026-10-28沙箱外实测本机Conda test的CUDA前向/反向通过，job605 checkpoint加载通过；后续按ENVIRONMENT选择机器对应的解释器。
-2026-10-28 用户确认个人电脑为 RTX 4060、8,188 MiB 显存、驱动595.99.02，
-`nvidia-smi`显示CUDA Version 13.2；服务器环境待用户补充。
-某个Python环境返回CUDA不可用不代表个人电脑没有GPU，须区分机器、解释器与执行环境。
+## 当前状态
 
-## 当前唯一决策
+- 已实现“有序笔画实例预测 → 单笔轨迹生成”方案中的单笔阶段；第一阶段和串联尚未实现。
+- 服务器训练job605已由用户要求彻底取消，进程已退出；保留全部checkpoint与现有产物。
+- 选用 `models/runs/single_stroke_full/job_605/train/best.pt`，epoch20、step120100。
+- 完整val 83,119笔：free轨迹IoU 0.8399036936，XY MAE 1.702859px，宽度MAE 1.160251px，端点L2 4.136157px。
+- 独立test675已启动并进入逐批推理：全部68,413笔、batch32、30个字符可视化。输出 `models/runs/single_stroke_full/job_605/test_job_675/`；结果以summary.json为准。
+- test672因I/O等待已取消。当前独立入口输出初始化阶段、15秒心跳、逐批进度/速度/ETA，心跳不代表数据读取一定有进展。
+- 后续优先确认test完成及查看失败样本，不自行重新启动训练。新计算按用户指令通过Slurm执行。
 
-参考 [Handwriting Trajectory Recovery via Autoregressive Ordered Stroke Instance Prediction](https://arxiv.org/html/2609.02251v1)，
-将“有序笔画实例预测 → 单笔轨迹生成”两阶段方法迁移到书法任务。
-唯一有效待办是 [models/TODO.md](models/TODO.md)。
-旧 free rollout、三任务分层 AR、扩散 / Flow Matching 的后续计划全部放弃，
-包括它们的 GPU 调参、正式训练和消融。代码存在或旧文档中有复选框，不代表应继续执行。
+## 当前单笔协议
 
-已实现独立单笔轨迹阶段和固定划分接入，完成迁移前 CPU smoke、小集训练与全量数据接口审核。
-有序笔画阶段和两阶段串联尚未实现；2026-10-26 已提交单笔阶段全量训练job 604（替代已取消的602）。
-当前实现、命令和差异见 [单笔阶段说明](models/SINGLE_STROKE.md)，验证摘要见
-[本机smoke记录](models/reports/single_stroke_smoke_20261023.json)。
-用户已明确要求后续计算通过Slurm提交，遵循 `/home/lkh/workspace/slurm-jobs/SKILL.md`；
-全量训练入口为 `models/scripts/train_single_stroke_full.slurm`；当前用户要求改完后由其手动提交。
+代码见 [SINGLE_STROKE](models/SINGLE_STROKE.md)。实际读取器用LMDB单笔PNG的 `<128` 区域作为mask，
+提取 `image_key` 规范化整字原图内容，区域外填255；保留256×256整字坐标。
+当前不是直接将存储的单笔PNG灰度送入模型。源码曾有直接PNG版本，现已恢复为与job605匹配的输入逻辑。
 
-## 必须保留的 job237 基线
+共享ResNet18 → C5 Transformer → FPN，P5→P4→P3→P2串行跨注意力、4层点解码。
+teacher forcing输入全部真实历史XY和宽度；给定真实首点三元组，从第二点开始监督。
+自由生成反馈预测历史，阈值0.5、上限400，invalid候选不保存。
+XY除以255、宽度直径除以256，XY sigmoid、宽度softplus+1e-6。
+损失：后续点XY L1 + 0.2×validity BCE + 1×width Charbonnier；epsilon=0.01/256且减去偏置。
+首点及padding不计几何损失，终止位置仅监督有效性。当前评估包含标签条件，不是image-only整字推理。
 
-目录：`models/runs/full_separated_10gb/job_237/`。
-保留 best.pt、last.pt、config.json、类别表、dataset_selection.json、训练日志、训练状态和全部现有评估。
-不删除、覆盖、重新训练写入或将新实验作为该 run 的 resume。
-新模型使用独立文件、模式、checkpoint 和输出目录。
+训练配置batch96、dim64、AdamW恒定lr3e-4、dropout0、200epoch上限；每100步保存checkpoint。
+每10epoch完整val，按free轨迹IoU选best；patience10按验证次数计，min_delta=.001、min_epochs20。
+独立test入口及个人电脑命令见 [TEST_README](models/TEST_README.md)。
 
-job237：CNN/FPN、dim64、4头、笔画 / 点解码器各2层、最大64笔/1024点、memory80 tokens。
-condition_mode=predicted，separate_branches=true；点历史训练为 teacher forcing。
-整字与笔画条件来自视觉分支，首点用 point BOS 预测，不是直接给真实首点。
-点层三分类 state 控制实际结束；辅助 last_head 不参与旧解码停止。
-使用完整库71,457条ready，batch48，AdamW lr3e-4，完成100轮、148900步。
-训练最后20轮 loss 降低约4.54%，第100轮最佳轮均值2.43398，因达到轮数上限结束。
+## 数据与限制
 
-重要历史区别：job237 宽度损失是归一化 Smooth L1；当前源码后来已改为像素 Charbonnier。
-不可把当前 loss 代码反推为旧权重的实际训练历史；精确续训应先恢复历史实现 / 版本。
-当前源码中新模型及测试通过，不等于已验证优于 job237。
+完整LMDB：73,606记录，71,457 ready、2,149 pending；ready共727,997笔。
+划分文件 `models/data_splits/full_character_v1.json`：train/val/test为56,622/8,121/6,714张、576,465/83,119/68,413笔。
+同一整字全部笔画属于一个集合；按字符分层及来源/近重复分组，不是字符类别或书家隔离。
+全量接口审核最长393点；自动管线标签不等于人工采集真实笔顺/轨迹。
+用户确认方向与首点监督可信，后续抽查资产对应与坐标变换。
+image_key与original_image_key坐标不可直接混用。数据、权重和运行输出被Git忽略，需单独迁移。
 
-## 已验证的 job237 评估结论
+## 保留的job237历史基线
 
-位置：`models/runs/full_separated_10gb/job_237/eval_epoch_100_20261020_144951/`。
-summary.json、state_analysis.json、逐图NPZ / 报告与 index.html 是复查入口。
-32张来自训练集，不是泛化评估：teacher-forced IoU 0.6793，free IoU 0.3097。
-31/32自主输出整字结束，29/32笔数正确；自主结束不等于结束正确。
-331笔按序配对共同笔画，点数MAE26.94点，中位数18点；未计缺失或额外笔画。
-每图笔数MAE1.16笔：酹少1、翮少2、爨多34且达到64笔保护上限。
-逐笔首点误差按图平均约10.29px；末点空间偏差按图平均约69.65px，勿与点数偏差混用。
-按序配对在漏笔后可能错配，需说明指标局限。
-teacher-forced 普通收笔精确率20.0%、召回率19.9%；drawing_end召回率46.9%。
-last_head在真实笔画范围内32图均识别正确最后一笔，但未用于自由解码。
-宽度拟合不足；mask/type较准确不保证轨迹正确。
+目录 `models/runs/full_separated_10gb/job_237/`，保留best/last、配置、类别表、日志和全部现有评估。
+保留模型与评估代码，结构见 [ARCHITECTURE](models/ARCHITECTURE.md)，本地查看见 [LOCAL_EPOCH100](reproduction/LOCAL_EPOCH100.md)。
+CNN/FPN、dim64、4头、两级各2层、最大64笔/1024点、memory80，condition_mode=predicted、separate_branches=true。
+全库训练100轮、148900步；历史宽度loss为归一化Smooth L1，不能用后改的像素Charbonnier反推训练历史。
+32张评估来自训练集：TF IoU 0.6793、free IoU 0.3097；31/32自主结束，29/32笔数正确。
+按序匹配的331笔点数MAE26.94、首点误差约10.29px、末点误差约69.65px；漏笔后可能错配，未计缺失/额外笔画。
+这些条件与job605不同，不能直接将分数视为泛化优劣。
 
-## 新方案的明确接口
+## 下一阶段与清理记录
 
-第一阶段：整字视觉特征 + 历史笔画mask编码，预测下一笔mask、框、有效性和起终点。
-起点u_k扩展为(x_k,y_k,w_k)，增加首点宽度头，以真实轨迹首点宽度监督；终点首版仍为XY。
-首点宽度使用独立损失项，不隐式混入论文的起点XY L1；第一阶段尚未实现，权重等细节待冻结。
-第二阶段：单笔图像独立共享编码、P5→P4→P3→P2四尺度串行注意力、4层解码块，
-teacher-forced点历史，首版必须同时预测XY、宽度和点有效性。
-单笔训练预测第l个点时，输入此前全部真实历史点的XY和宽度（teacher forcing），
-不是只给真实首点后反馈预测点；历史点embedding包含宽度，因果mask及移位防止目标泄漏。
-首点XY和宽度均直接给真实值，从第二点开始预测XY、宽度和有效性，首点不计入重新预测损失。
-自由解码使用预测历史；串联推理首点XY和宽度直接取笔画层预测的u_k三元组，第二阶段不重新预测首点。
-给真实首点XY和宽度的自由解码属于条件诊断；完整image-only推理使用预测首点三元组，不能读取真实宽度。
-第二阶段XY除以255、宽度直径除以256；XY sigmoid，宽度softplus+1e-6。
-第二阶段损失为后续有效点XY L1 + 0.2×有效性BCE + 1×宽度Charbonnier，
-宽度epsilon=0.01/256，减去epsilon偏置，各项先每笔平均再对笔平均。
-无效结束位置只算BCE，首点和padding不算几何损失。第一阶段后续共用单位与导出转换。
-首点与后续点宽度误差应分别报告。
-单笔视觉输入为mask区域内的原图内容，区域外填白，保留位置并形成256×256画布；
-训练使用真实mask，推理使用预测mask提取同一原图内容，不直接把二值mask当第二阶段图像。
-原图必须映射到轨迹对应的规范化画布，不能直接混用original_image_key与image_key坐标。
-跨阶段传单笔图像和预测起点，不是将第一阶段隐藏z直接作为第二阶段条件。
-预测起点实际作为轨迹第一点；预测终点首版只做第一阶段辅助监督。
-两阶段分别训练。论文并非完全自喂历史训练，不能把“AR推理”写成“free rollout训练”。
-论文没有宽度输出；宽度是用户要求的首版书法扩展，单独记录损失、权重及粗细评估。
-未明确的基础loss形式、网络超参数、图像构造细节与结束占位约定必须核验，不能猜测。
+第一阶段预测mask、框、有效性、起点 `(x,y,width)` 和终点XY；先冻结基础loss与独立首点宽度监督。
+串联传预测mask提取的单笔图和预测首点，第二阶段不重新预测第一点，不直接传隐藏z。
+方法来源：[Handwriting Trajectory Recovery via Autoregressive Ordered Stroke Instance Prediction](https://arxiv.org/html/2609.02251v1)。
+网络型号、loss细节等未核实项不能当成论文官方实现。
 
-## 数据现状与限制
-
-完整库 `data/chtr_mmah_lmdb`：73,606记录，71,457 ready / 2,149 pending；ready按元数据共727,997笔。
-冻结库 `data/chtr_mmah_lmdb_1915`：1915 ready、8990笔、563字符类别；作者全为空，未人工审核。
-单笔PNG在 masks_key 的NPZ内，如stroke000.png；轨迹NPZ有points、stroke_offsets等。
-PNG编号与offsets按笔画顺序对应；抽查PNG为256×256白底黑笔画。
-框可由mask推导，起终点可由轨迹首末点提取；计数不代表全部标签通过质量验收。
-这些是自动管线监督，不能宣称为人工真实笔顺 / 采集轨迹。
-用户确认方向 / 首点监督可信：pipeline中VS使用MMAH单笔画数据提供首点约束，保证起点正确。
-本方案以此为前提；后续抽查用于核对资产匹配、坐标变换与数据接入，不再将方向可信性作为待定前提。
-image_key是规范化图片，original_image_key是另一份原始书法图；不要直接混用坐标。
-先按整字划分，再展开笔画；无作者信息不能宣称书家独立验证，检查近重复来源。
-
-## 2026-10-26 本机接入核验
-
-沿用 `third_party/StrokeExtraction/.venv/bin/python`，Python3.10.19、torch2.12.1+cu130、
-torchvision0.27.1+cu130；CUDA不可用。10项划分与单笔测试通过。
-现有 `full_character_v1.json` 与本机完整库元数据指纹一致，直接复用；
-train / val / test 为56,622 / 8,121 / 6,714张、576,465 / 83,119 / 68,413笔。
-记录见 [本机划分核验](models/reports/local_dataset_split_20261026.json)，
-更新后的启动、恢复与评估命令见 [单笔阶段说明](models/SINGLE_STROKE.md)。
-本次未启动正式训练或重跑全量资产解码审核。
-
-## 2026-10-26 全量训练与最新评估协议
-
-历史job604采用batch48、每1000步固定16笔TF验证；其实际配置和产物保留。
-用户最新要求：取消step中途评估，每10个epoch完整评估val、固定30字可视化、增大batch，手动提交。
-当前源码配置为batch96、lr3e-4恒定AdamW、200epoch、max_points=400；checkpoint每100步。
-完整val为83,119笔，批量自由解码只给真实首点和真实mask区域原图，TF仅作辅助报告。
-按自由解码轨迹重绘IoU选best.pt；early stopping patience10计10次评估（约100epoch），min_delta=.001、min_epochs20。
-每轮 `eval_total_epoch_010/` 等目录保存完整summary、全笔strokes.jsonl及固定30个val字的整字/逐笔PNG、NPZ和宽度曲线HTML。
-正常训练结束/早停后加载best.pt完整test一次，输出test_best/，test不参与模型选择。
-入口 `models/scripts/train_single_stroke_full.slurm`，单卡、4 CPU、32G、3天；输出按Slurm job ID独立。
-本次不自动提交或取消旧作业；旧batch/评估协议的checkpoint不能直接resume新配置。
-CPU合成夹具16项测试通过；未做batch96 GPU容量测试或实际全库自由评估。
-
-## 下一次接手的第一步
-
-1. 读主TODO和单笔阶段说明，不继续旧计划；未明确的论文实现细节仍需核验。
-2. 单笔阶段代码、训练/条件评估入口已实现，不重复新建；小集产物在
-   `models/runs/single_stroke_smoke_v1/`，其中`fit_single_representative`为48点单笔128步拟合，
-   `fit_multi_coverage`为8笔32步，`fixed32_epoch1`为32字334笔一轮训练。
-3. 10项测试通过，包含增强与dropout下中途恢复逐参数一致、因果性、padding、停止与导出。
-   48点单笔自由解码输出48点并正常停止；这是真实mask/首点条件下的训练样本拟合。
-4. 全量实际读取71,457张整字、727,997笔，最长393点；取整中心点均在对应mask内。
-   train/val/test展开笔数与清单一致；test只检查资产，不用于模型选择。
-5. 本机CUDA不可用。固定32字充分拟合、留出自由解码质量和GPU容量尚待验收，
-   之后实施有序笔画阶段（含u_k首点宽度头）和串联评估。
-
-数据和训练资产被Git忽略；服务器仅git pull不会自动获得LMDB、权重或本地评估。
-仓库当前路径是`/home/lkh/workspace/CHTR`，不要使用已迁移前的epoch100_bundle路径执行命令。
+已按用户要求删除放弃的free rollout、旧三任务分层AR、扩散/Flow Matching专用文档、实现、配置与测试。
+保留job237基线、当前单笔阶段、共享模块及数据生成管线；本次不删除任何训练权重、数据或已有实验产物。

@@ -1,161 +1,70 @@
-# 书法图像到书写轨迹模型
+# 书法轨迹模型
 
-> 当前唯一计划：参考论文实施“有序笔画预测 → 单笔轨迹生成”，见 [TODO](TODO.md) 和 [HANDOFF](../HANDOFF.md)。
-> 保留 job237 基线。此前 free rollout、三任务AR和扩散后续计划已放弃；下方相关实现与命令仅作历史参考。
-> 单笔轨迹阶段已实现并通过本机CPU smoke与全量数据接口审核，见 [单笔阶段](SINGLE_STROKE.md)。
-> 有序笔画阶段和串联尚未实现，新方案未启动正式训练。
+当前主线是“有序笔画预测 → 单笔轨迹生成”。单笔轨迹阶段已实现并完成 job605 全量训练的前20轮验证；有序笔画阶段和串联尚未实现。
+计划见 [TODO](TODO.md)，接口和评估协议见 [SINGLE_STROKE](SINGLE_STROKE.md)。
 
-本目录实现 LMDB 数据适配、图像编码、有序笔画解码、逐点轨迹生成与多任务训练。
-输入为单张灰度书法图像，输出按书写顺序排列的笔画轨迹。模型结构见
-[ARCHITECTURE.md](ARCHITECTURE.md)，1915 数据集从头初始化的自由训练见
-[FREE_ROLLOUT.md](FREE_ROLLOUT.md)。
+## 当前状态（2026-10-28）
 
-## 历史实现：三个主任务的独立自回归基线（后续计划已放弃）
+- job605 已按用户要求彻底取消，checkpoint 和训练、验证产物保留。
+- 选用 `runs/single_stroke_full/job_605/train/best.pt`：epoch 20、step 120100。
+- 完整验证集83,119笔：自由生成轨迹 IoU **0.839904**、坐标 MAE **1.702859 px**、宽度 MAE **1.160251 px**、端点 L2 **4.136157 px**。
+- test675 已提交并开始逐批推理：完整68,413笔，batch32，30个字符可视化。最终结果以输出目录中的 `summary.json` 为准，不把运行状态当作已完成结论。
+- 当前输入为真实笔画 mask 覆盖规范化整字原图，区域外填白，并提供真实首点 `(x,y,width)`；后续点自由生成。这是单笔条件评估。
 
-实现入口：[train_hierarchical_ar.py](scripts/train_hierarchical_ar.py)，配置：
-[hierarchical_ar.json](configs/hierarchical_ar.json)，完整说明：[HIERARCHICAL_AR.md](HIERARCHICAL_AR.md)。
-本次新增独立模型和损失，原模型、原loss和原训练 / 评估入口保持原样。
+## 数据与输出
 
-- **三个主任务**：原始点几何L1、点结束BCE、笔画结束BCE；没有mask/type、endpoints或数量头。
-- **训练**：反馈自预测的三维几何，按真实有效笔数 / 点数展开；结束预测不截断监督，不做64点重采样。
-- **推理**：点结束头控制收笔，笔画结束头控制整字结束；仅输入图像，保护上限384点/笔、16笔/图。
-- **网络**：随机初始化ResNet-18/FPN、dim128，几何梯度可回传全部上游；独立checkpoint模式和版本。
-- **数据**：默认1723张训练、192张按图留出验证，各固定评估32张；与旧全1915训练须区分。
-- **验证状态**：65项CPU测试通过；GPU batch24容量、小集拟合和正式训练仍待验证，尚未提交新作业。
+固定划分：[full_character_v1.json](data_splits/full_character_v1.json)，说明见 [data_splits/README](data_splits/README.md)。
 
-在工作区根目录提交新模式：
+| 集合 | 字图 | 笔画 |
+| --- | ---: | ---: |
+| train | 56,622 | 576,465 |
+| val | 8,121 | 83,119 |
+| test | 6,714 | 68,413 |
 
-```bash
-mkdir -p logs
-gpu-sbatch --user_name lkh CHTR/models/scripts/train_hierarchical_ar.slurm
-```
+全部集合共用 `../data/chtr_mmah_lmdb/`；先划分整字，再展开单笔。val 用于选择模型，test 不参与调参或早停。
+数据、checkpoint 和运行产物被 Git 忽略，拉取代码后须单独准备。
 
-新产物目录为 `models/runs/hierarchical_ar_three_task/job_<jobid>/`，
-专用评估入口为 [evaluate_hierarchical_ar.py](scripts/evaluate_hierarchical_ar.py)，不能使用旧三分类评估器。
-计划与完成状态见 [主 TODO](TODO.md)；后续生成式路线见 [扩散／Flow Matching TODO](TODO_DIFFUSION.md)。
+## 运行入口
 
-## 数据接口
+服务器与个人电脑环境：[ENVIRONMENT](ENVIRONMENT.md)。个人电脑安装、文件准备、CPU/GPU测试命令：[TEST_README](TEST_README.md)。
 
-数据来源为 `../data/chtr_mmah_lmdb/`，读取器位于 `datasets/`。
-训练使用有完整合法轨迹的 ready 样本，pending 样本不参与轨迹训练。
-每个 LMDB 目录必须包含匹配的 `stroke_type_map.json`，类别 ID 为 0–23。
-
-| 字段 | 含义 |
-| --- | --- |
-| `image` | 灰度图像，默认 256×256 |
-| `points[T,6]` | `[x,y,width,continue,stroke_end,drawing_end]` |
-| `stroke_offsets[K+1]` | 语义笔画边界，左闭右开 |
-| `subpath_offsets` | 数据中须等于 `stroke_offsets`，一笔对应一条连续路径 |
-| `stroke_types[K]` | 24 类笔画监督 |
-| `stroke_masks[K,H,W]` | 逐笔前景掩码 |
-
-原始坐标和宽度直径采用像素单位；模型内部将 XY 除以 `size-1`、宽度除以 `size`。
-PNG 掩码采用白底黑笔画，读取时以 `<128` 转成前景。
-批处理使用有效笔画与有效点掩码，padding 不参与注意力或损失；超过序列上限的标签会报错。
-
-训练加载器支持 `--min-trajectory-iou` 与 `--min-mask-iou`，两项按 AND 组合，默认不设阈值。
-mask 默认使用 `mask_cleanup_whole`，也可用 `--mask-iou-stage mask_extraction_whole` 切换。
-筛选不删除 LMDB 记录，质量指标不会作为自由生成的输入。
-
-## 网络与训练方式
-
-原 teacher-forced 配置及模型构造默认保留无预训练 CNN/FPN、隐藏维度64。
-当前 free rollout 默认改为完整 ResNet-18（四个残差阶段）+ FPN、隐藏维度128，随机初始化；
-两种配置的笔画与逐点解码器均各2层。
-笔画模块预测 mask、类别、最后一笔及辅助起终点；逐点模块接收图像特征、笔画条件、
-软 mask 注意力偏置和点历史，预测坐标、宽度与三类点事件。
-
-原 `scripts/train.py` 采用 teacher forcing：点历史来自真实标签，`condition_mode=predicted` 使用预测的 mask 和类别。
-`model.separate_branches=true` 时，视觉和逐点参数组分别接受各自监督并分别裁剪梯度。
-XY 与宽度损失均采用像素尺度 Charbonnier，共用 `geometry_loss.epsilon_px` 和
-`scale_px`，按有效点先在笔内平均，再对笔画平均。宽度按图像尺寸还原为像素直径，
-默认权重为 1；另含首点与笔内位移监督。其他损失包含
-点状态、mask BCE/Dice、类别、最后一笔和辅助起终点。
-独立 `scripts/train_free_rollout.py` 已实现完全自喂历史训练：预测几何与事件决定后续历史、换笔和结束，
-连续历史保留完整 BPTT。可微重绘损失尚未实现。
-
-当前 free rollout 配置为 `configs/free_rollout.json`：使用全部 1915 样本、随机初始化、ResNet-18/FPN、dim=128、
-最大 500 epoch，早停沿用 job237 的训练损失规则（10 / 0.001 / 20）。默认不读取任何旧 `last.pt`。
-batch=24、梯度累积=1、学习率 1e-5；原 teacher-forced 全量配置继续单独保留。
-
-## 当前全量配置
-
-配置文件：[configs/full_separated_10gb.json](configs/full_separated_10gb.json)。
-
-| 参数 | 设置 |
-| --- | --- |
-| batch / workers | 48 / 2 |
-| 学习率 / weight decay | 0.0003 / 0 |
-| 数据增强 / dropout | 关闭 / 0 |
-| 最大笔画数 / 每笔点数 | 64 / 1024 |
-| 最大轮数 | 100 |
-| checkpoint 间隔 | 每 100 步及轮末 |
-| 早停 | patience=10，min_delta=0.001，min_epochs=20 |
-
-配置中的相对 dataset 和 output_dir 路径以 `CHTR/models/` 为基准。
-`minimal.json` 和 `gpu.json` 默认使用保留的 1915 数据集；全量配置使用完整数据集。
-
-## 训练与恢复
-
-在工作区根目录通过 Slurm 运行：
+服务器独立 test（执行会提交新作业）：
 
 ```bash
-cd /home/lkh/workspace
-mkdir -p logs
-gpu-sbatch --user_name lkh chtr_train_10gb.slurm
+cd /home/lkh/workspace/CHTR
+gpu-sbatch --user_name lkh models/scripts/test_single_stroke_job605.slurm
 ```
 
-其他账户提交时替换 `--user_name`。已分配 GPU 的作业中，也可使用模型入口：
+当前测试结果：`runs/single_stroke_full/job_605/test_job_675/`，包括 `summary.json`、逐笔 `strokes.jsonl`、30个字符的 `index.html` 和轨迹NPZ。
+实时日志：
 
 ```bash
-bash CHTR/models/scripts/train_gpu.sh \
-  --config /home/lkh/workspace/CHTR/models/configs/full_separated_10gb.json \
-  --output-dir /absolute/path/to/new-run
+tail -f /home/lkh/workspace/logs/chtr-stroke-test605-675.out
 ```
 
-解释器优先使用 `CHTR_PYTHON` 或 `models/.venv`，否则使用
-`../third_party/StrokeExtraction/.venv/bin/python`。保留调度器分配的 `CUDA_VISIBLE_DEVICES`。
+独立评估入口输出初始化阶段、每15秒状态提示，以及每批完成数、比例、平均速度和预计剩余时间。心跳不代表磁盘读取一定在推进。
+后续若重训，使用 `scripts/train_single_stroke.py` 与 `configs/single_stroke.json`，服务器入口为 `scripts/train_single_stroke_full.slurm`；当前没有继续训练的待办。
 
-正式权重保留在：
-
-- `runs/full_separated_10gb/job_237/best.pt`、`last.pt`。
-- `runs/full_separated/job_231/last.pt`：此前停止的正式训练断点。
-
-恢复同配置训练：
-
-```bash
-gpu-sbatch --user_name lkh chtr_train_10gb.slurm \
-  --resume /home/lkh/workspace/CHTR/models/runs/full_separated_10gb/job_237/last.pt
-```
-
-`--resume` 恢复模型、优化器、随机状态和数据位置；`--init-weights` 只加载模型权重，创建新的训练状态。
-两者互斥。`--epochs` 和 `--max-steps` 是累计上限，继续已满轮数的 checkpoint 时需相应提高上限。
-数据、模型、采样及停止设置须满足恢复兼容检查；更改分支或损失配置应使用新训练目录。
-
-训练输出包括最新 `last.pt`、有效改善时的 `best.pt`、逐步及逐轮指标、实际配置、类别表、
-数据筛选统计和结束状态。这些正式训练记录与权重一起保留。
-
-## 自由生成与评估入口
-
-`networks/autoregressive.py` 提供 image-only greedy 解码，仅输入图像，不使用真实轨迹、
-mask、类别、笔画数或点数。点事件控制换笔和整字结束；达到上限时标记 truncated，不伪造结束事件。
-
-`scripts/evaluate_memorization.py` 提供训练图抽样的 teacher-forced / image-only 对比。
-在 Slurm 分配的环境中传入可信 checkpoint 与新的 `--output` 目录运行；
-抽样拟合指标不能视为泛化指标。它与 `scripts/` 中其他工具均为可重新执行的源码，历史评估结果已清理。
-
-## 源码目录
+## 代码组织
 
 ```text
-configs/         网络、数据和训练配置
-datasets/        LMDB 适配、变长批处理和同步增强
-networks/        编码器、笔画与逐点解码、自由生成
-losses/          多任务与像素几何损失
-training/        早停状态管理
-scripts/         训练、评估、可视化和环境工具
-visualization/   笔画类别与 mask 展示
-tests/           模型与数据行为测试源码
+datasets/single_stroke.py             当前单笔数据与批处理
+datasets/dataset_split.py             固定划分及完整性校验
+networks/single_stroke.py             四尺度单笔轨迹模型
+losses/single_stroke.py               坐标、宽度、有效性损失
+training/single_stroke*.py            checkpoint与完整集合评估
+scripts/*single_stroke*               训练、独立评估、审计及Slurm入口
+tests/                               当前模型、固定划分及基线回归测试
 ```
 
-宽度损失尺度变更后，从旧 checkpoint 训练应使用 `--init-weights` 和新的输出目录；
-旧损失版本的 `--resume` 会被兼容检查拒绝。不配置 `geometry_loss` 时仍保留原归一化 Smooth L1。
+回归检查（CPU合成数据，不读取完整训练库）：
+
+```bash
+TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 third_party/StrokeExtraction/.venv/bin/python -m unittest discover -s models/tests -v
+```
+
+## 历史基线和清理范围
+
+保留 job237 的模型、推理与评估代码、配置及运行资产，供历史复查；其结构见 [ARCHITECTURE](ARCHITECTURE.md)，本地评估见 [LOCAL_EPOCH100](../reproduction/LOCAL_EPOCH100.md)。
+job237 曾见完整训练库，其32图评估是训练集诊断，不能与 job605 的独立验证分数直接比较。
+free rollout、旧三任务分层 AR、扩散 / Flow Matching 已放弃；对应专用文档、代码、配置和测试已清理。共享基线模块和数据生成管线保留。

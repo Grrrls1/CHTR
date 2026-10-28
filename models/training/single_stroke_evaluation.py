@@ -1,6 +1,7 @@
 """Full-split free decoding and fixed-character galleries for stage two."""
 import html
 import json
+import time
 from pathlib import Path
 
 import cv2
@@ -88,6 +89,8 @@ def evaluate_split(model, dataset, device, config, output, fixed_ids=None, indic
     was_training = model.training
     model.eval()
     try:
+        started=time.monotonic()
+        progress_every=config.get('eval_progress_every_batches',0)
         with (output/'strokes.jsonl').open('w') as log:
             for start in range(0, len(indices), batch_size):
                 samples = [dataset[i] for i in indices[start:start+batch_size]]
@@ -135,8 +138,13 @@ def evaluate_split(model, dataset, device, config, output, fixed_ids=None, indic
                         cards.setdefault(sid, []).append('<article>'+''.join(
                             f'<img width="256" src="{tag}_{kind}.png" alt="{kind}">' for kind in ('input','gt','pred'))
                             +width_curve(gt,pred)+'<pre>'+html.escape(json.dumps(row,ensure_ascii=False,indent=2))+'</pre></article>')
-                if count % max(batch_size, 1024//batch_size*batch_size) == 0:
-                    print(json.dumps(dict(kind='evaluation_progress',split=dataset.split,strokes=count,total=len(indices))), flush=True)
+                if (progress_every and ((start//batch_size+1)%progress_every==0 or count==len(indices))) or count % max(batch_size, 1024//batch_size*batch_size) == 0:
+                    elapsed=time.monotonic()-started
+                    rate=count/max(elapsed,1e-9)
+                    print(json.dumps(dict(kind='evaluation_progress',split=dataset.split,strokes=count,total=len(indices),
+                                          percent=round(100*count/len(indices),2),elapsed_seconds=round(elapsed,1),
+                                          strokes_per_second=round(rate,3),eta_seconds=round((len(indices)-count)/rate,1))),flush=True)
+                    log.flush()
         teacher_metrics = {k: v/count for k,v in totals.items()}
         teacher_metrics.update(terminal_recall=terminal_hits/max(terminal_count,1), valid_recall=valid_hits/max(valid_count,1))
         free_metrics = {k: v/count for k,v in free_totals.items()}

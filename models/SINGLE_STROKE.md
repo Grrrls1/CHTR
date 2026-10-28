@@ -1,7 +1,8 @@
 # 两阶段书法迁移：单笔轨迹阶段
 
-当前已实现独立第二阶段；迁移前已完成 CPU smoke 验证。有序笔画阶段尚未实现；本阶段评估给定真实
-mask 与首点 `(x,y,width)`，不能当作完整 image-only 推理或训练收敛结论。
+当前已实现独立第二阶段，完成CPU smoke、全量资产接入审核及服务器job605的完整训练/验证运行。
+job605已取消，保留epoch20的best.pt；完整val轨迹IoU为0.839904。test675正在独立评估全部68,413笔并可视化30字，结果待验收。
+有序笔画阶段尚未实现；本阶段评估给定真实mask与首点 `(x,y,width)`，不是完整image-only推理。
 
 ## 模型与数据协议
 
@@ -59,7 +60,7 @@ XY与宽度只监督第二点之后的有效点；宽度误差采用归一化单
 宽度损失权重属于首版实现选择，尚未用完整训练确定最优值；不得据此改写job237历史。
 
 全量配置使用AdamW、lr=3e-4恒定学习率、batch96、dim64、最大400点；
-全库实测最长393点，没有静默截断。batch96尚未做GPU容量实测，可按实际峰值调整。
+全库实测最长393点，没有静默截断。job605已使用batch96完成至少20轮训练；个人电脑容量另行实测。
 smoke配置使用dim32、视觉encoder1层，但仍保留ResNet18和四尺度4层点解码。
 
 ## 服务器运行环境
@@ -71,13 +72,13 @@ smoke配置使用dim32、视觉encoder1层，但仍保留ResNet18和四尺度4�
 2026-10-26 实测：Python 3.10.19、torch 2.12.1+cu130、torchvision 0.27.1+cu130、
 NumPy 1.23.5、Pillow 9.5.0、opencv-python-headless 3.4.18.65、lmdb 3.0.0。
 工具沙箱内CUDA不可见；Slurm分配GPU后已确认RTX5090和CUDA13.0前向/反向可用。
-系统默认 Python 位于 miniconda3，未安装训练依赖，请使用上述独立环境。
+服务器训练请使用上述独立解释器；不要把PATH中的其他Python视为同一环境。
 该服务器环境已含本阶段所需依赖，无需另外安装整套 requirements 或升级现有 torch / OpenCV。
 `requirements-single-stroke.txt` 是通用安装参考；服务器现存 OpenCV 版本低于其声明的4.5，
 是否可用以服务器测试与数据接入核验为准。
 
 以下命令从仓库根目录执行。计算作业遵循
-[workspace Slurm skill](/home/lkh/workspace/slurm-jobs/SKILL.md)。用户要求手动提交，本次没有提交或取消作业。
+[服务器环境与调度约定](ENVIRONMENT.md)。已按用户授权取消job605、提交独立test675；后续按新的明确指令调度。
 Slurm脚本保留CUDA_VISIBLE_DEVICES，并设置 `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1` 读取可信本地训练状态。
 
 ## 全量训练与提交
@@ -95,10 +96,9 @@ grad_clip=1、seed42、4线程、augment=false、dropout=0、最多200个epoch�
 单卡、4 CPU、32G内存、3天时限。脚本先检查CUDA再直接训练，不进行GPU smoke。
 输出为 `models/runs/single_stroke_full/job_<ID>/train/`，新run要求独立空目录。
 
-旧job604的batch48及1000步/16笔验证配置已经被加载，不会随源码配置修改自动改变。
-需要新run应用这次变更；batch和评估协议改变后，旧checkpoint不能直接resume到新配置。
-是否停止旧job604由用户手动决定，先通过 `squeue -u "$(id -un)"` 检查状态，若仍在运行可执行 `scancel 604`。
-job237和已有训练/评估产物保持保留。
+job605已按用户要求彻底取消。保留 `runs/single_stroke_full/job_605/train/` 下的best/last及所有现有产物。
+best.pt对应epoch20、step120100；此前job604是旧batch48和step级评估配置，不作为当前运行入口。
+job237历史基线保持保留。上面的命令仅供后续重训，当前待办是完成独立test和结果验收。
 
 ## 每10个epoch的完整验证
 
@@ -165,8 +165,15 @@ gpu-srun --user_name "$(id -un)" --ntasks=1 --gres=gpu:1 --cpus-per-task=4 --mem
 
 ## 验证边界
 
-本次使用CPU合成夹具验证16项测试：完整划分覆盖、只按epoch调度、固定字图库、批量/单笔
+历史CPU合成夹具验证覆盖：完整划分覆盖、只按epoch调度、固定字图库、批量/单笔
 解码一致、混合停止长度、最终完整test、因果性、padding、loss梯度、早停及中途恢复逐参数一致。
-没有启动GPU smoke或新训练；batch96显存容量与全库评估耗时仍待用户提交后确认。
+job605已实际运行batch96训练及83,119笔完整val。独立test675已开始推理；GPU容量和速度取决于具体机器与batch，不能由服务器结论推定个人电脑可用batch。
 历史全量资产审核见 [2026-10-23记录](reports/single_stroke_smoke_20261023.json)，
 本机元数据指纹核验见 [2026-10-26记录](reports/local_dataset_split_20261026.json)。
+
+## 独立test进度日志
+
+当前服务器脚本为 `scripts/test_single_stroke_job605.slurm`，作业675输出到
+`runs/single_stroke_full/job_605/test_job_675/`。启动打印checkpoint加载、元数据读取/划分校验等阶段；
+每15秒打印阶段心跳，评估时每批打印完成数、百分比、平均速度与ETA。
+心跳只表示日志线程仍在运行，不保证I/O有进展。个人电脑命令见 [TEST_README](TEST_README.md)。

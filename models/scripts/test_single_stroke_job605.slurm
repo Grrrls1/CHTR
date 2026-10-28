@@ -26,10 +26,14 @@ OUTPUT="models/runs/single_stroke_full/job_605/test_job_${SLURM_JOB_ID}"
 [[ -x "$EVAL_PY" ]]
 [[ -f "$CHECKPOINT" ]]
 [[ ! -e "$OUTPUT" ]]
+printf 'Job=%s\nCheckpoint=%s\nOutput=%s\nCUDA_VISIBLE_DEVICES=%s\n' \
+  "$SLURM_JOB_ID" "$CHECKPOINT" "$OUTPUT" "$CUDA_VISIBLE_DEVICES"
+echo 'Acquiring shared dataset lock...'
 exec 9>/home/lkh/workspace/CHTR/data/.chtr_mmah_lmdb.lock
 flock -s 9
+echo 'Dataset lock acquired; launching test.'
 
-srun "$EVAL_PY" models/scripts/evaluate_single_stroke.py \
+srun --unbuffered "$EVAL_PY" -u models/scripts/evaluate_single_stroke.py \
   --checkpoint "$CHECKPOINT" \
   --output "$OUTPUT" \
   --split test --limit 0 \

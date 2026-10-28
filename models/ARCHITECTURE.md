@@ -1,4 +1,4 @@
-# 数据集、网络结构与损失说明
+# 历史job237基线：数据集、网络结构与损失说明
 
 本项目输入一张书法单字图像，预测其书写轨迹：
 
@@ -6,7 +6,8 @@
 points[T,6] = [x, y, width, continue, stroke_end, drawing_end]
 ```
 
-一笔对应一条连续路径。网络通过笔画掩码和类型监督学习笔画结构，并将预测结果作为轨迹生成的条件。已实现 teacher-forcing、image-only 自由解码和独立的完整 BPTT free rollout 训练；可微重绘仍待实现。运行方法见 [README.md](README.md) 与 [FREE_ROLLOUT.md](FREE_ROLLOUT.md)。
+本文描述保留的历史基线及其共享模块，不是当前单笔模型的结构说明。当前主线见 [SINGLE_STROKE](SINGLE_STROKE.md)。
+一笔对应一条连续路径。历史模型通过笔画掩码和类型监督学习结构，支持teacher forcing和image-only自由解码。基线复查入口为 `scripts/evaluate_memorization.py`。
 
 ## 1. 数据集
 
@@ -159,7 +160,7 @@ flowchart LR
 - **像素特征**保留空间细节，供掩码头定位当前笔画及其覆盖区域。
 - **视觉 tokens**提供整字上下文，供两个 Transformer 通过交叉注意力读取。
 
-当前支持自定义 CNN 和完整 ResNet-18（四个残差阶段），最小及原 teacher-forced 配置保留 CNN，默认 free rollout 配置使用无预训练 ResNet-18 + 四级 FPN。FPN 输出多尺度特征，原 teacher-forced 配置隐藏维度 `D=64`，当前从头训练的 free rollout 配置使用 `D=128`。高分辨率特征在默认画布下约为 `[B,D,64,64]`；后两个尺度分别池化成 8×8 和 4×4 网格，展开并添加二维位置编码，形成 `[B,80,D]` 视觉 memory。网格大小由 `memory_size` 控制。
+共享编码器支持自定义 CNN 和完整 ResNet-18（四个残差阶段）。job237使用CNN/FPN、隐藏维度 `D=64`。高分辨率特征在默认画布下约为 `[B,D,64,64]`；后两个尺度分别池化成 8×8 和 4×4 网格，展开并添加二维位置编码，形成 `[B,80,D]` 视觉 memory。网格大小由 `memory_size` 控制。
 
 DINOv3 是后续可替换 backbone 候选，目前未接入；使用 ViT 时需另外设计空间特征适配。
 
@@ -201,13 +202,13 @@ attention_logits = QK^T / sqrt(D_head) + alpha * log(clamp(M_k, min=1e-4))
 
 **当前训练使用 teacher forcing**：输入右移一位的真实点，预测当前位置的点。因果注意力阻止读取未来点。默认 `condition_mode="predicted"` 使用预测掩码与类别；`ground_truth` 可用于真实中间条件预热。
 
-**自由解码是后续流程**：输入自己生成的上一点；遇到 `stroke_end` 切换笔画，遇到 `drawing_end` 停止整字。当前 `forward` 根据训练 batch 的笔画数展开网络，尚不能仅凭图像自行确定生成笔画数、长度和完整终止流程。
+**自由解码**：`networks/autoregressive.py`输入自己生成的上一点；遇到 `stroke_end` 切换笔画，遇到 `drawing_end` 停止整字；达到保护上限时标记截断。训练 `forward` 根据标签笔画数展开，与推理解码分开。
 
 ### 2.4 当前配置与输出
 
 | 配置 | 最小值 |
 | --- | --- |
-| 隐藏维度 | teacher-forced 为 64；当前 free rollout 为 128 |
+| 隐藏维度 | job237为64 |
 | 注意力头数 | 4 |
 | 笔画 / 点解码层数 | 2 / 2 |
 | FFN 维度 | 256 |
@@ -215,7 +216,7 @@ attention_logits = QK^T / sqrt(D_head) + alpha * log(clamp(M_k, min=1e-4))
 | 最大笔画数 / 最大单笔点数 | 64 / 1024 |
 | 视觉网格 | 8×8 与 4×4 |
 
-配置见 [minimal.json](configs/minimal.json) 和 [gpu.json](configs/gpu.json)。当前前向返回有效笔画的几何与状态预测，以及掩码、类别、最后一笔和起终点预测。完整图像到轨迹的推理接口、像素单位导出及派生 offsets 将在自由解码阶段实现。
+配置见 [minimal.json](configs/minimal.json) 和 [gpu.json](configs/gpu.json)。当前前向返回有效笔画的几何与状态预测，以及掩码、类别、最后一笔和起终点预测。完整图像到轨迹的自由解码及导出入口保留在 `networks/autoregressive.py`。
 
 AI 结构图仅作为 [视觉草稿](figures/model_architecture_draft.png)，其连线仍有遗漏，详见 [图注](figures/README.md)。以上 Mermaid 和代码定义准确的数据依赖。
 
