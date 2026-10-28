@@ -3,6 +3,9 @@
 独立入口是 `models/scripts/evaluate_single_stroke.py`，不需要启动训练或安装 Slurm。
 以下命令均在个人电脑的 **CHTR 仓库根目录**执行。
 
+个人电脑与服务器的硬件、驱动及Python环境记录见 [ENVIRONMENT](ENVIRONMENT.md)。
+个人电脑已确认具有RTX 4060 GPU；某个解释器的CUDA检测结果不能代替整机配置。
+
 ## 评估内容
 
 - 使用 job605 的 `train/best.pt`：epoch 20、step 120100，验证集轨迹 IoU 为 0.8399036936。

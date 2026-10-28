@@ -1,5 +1,13 @@
 # CHTR 工作交接
 
+## 环境记录
+
+个人电脑与服务器配置统一见 [ENVIRONMENT](models/ENVIRONMENT.md)，后续先读该文件，
+不重复要求用户说明已记录的 CUDA / GPU 配置。
+2026-10-28 用户确认个人电脑为 RTX 4060、8,188 MiB 显存、驱动595.99.02，
+`nvidia-smi`显示CUDA Version 13.2；服务器环境待用户补充。
+某个Python环境返回CUDA不可用不代表个人电脑没有GPU，须区分机器、解释器与执行环境。
+
 ## 当前唯一决策
 
 参考 [Handwriting Trajectory Recovery via Autoregressive Ordered Stroke Instance Prediction](https://arxiv.org/html/2609.02251v1)，
