@@ -1,6 +1,5 @@
 import json
 from pathlib import Path
-import shutil
 import sys
 import tempfile
 import unittest
@@ -11,13 +10,12 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT.parent))
 from models.datasets.filtered_lmdb_dataset import CHTRFilteredDataset
 
-MAP=ROOT.parent/'reproduction/pipeline_runs/mmah_single_path_gpu2_20261005_five/dataset_simplified_dataloader_v2/stroke_type_map.json'
-
-
 class WholeIoUSelectionTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.path=Path(self.temp.name)
-        shutil.copyfile(MAP,self.path/'stroke_type_map.json')
+        # Selection tests need the mapping schema, not an ignored historical run.
+        (self.path/'stroke_type_map.json').write_text(json.dumps(dict(
+            types=[dict(id=i,name_zh='fixture_'+str(i)) for i in range(24)])))
         metrics={
             'boundary':dict(trajectory_whole=.8,mask_cleanup_whole=.9,mask_extraction_whole=.9),
             'low_trajectory':dict(trajectory_whole=.7,mask_cleanup_whole=.95,mask_extraction_whole=.95),

@@ -5,7 +5,7 @@
 
 ## 当前状态
 
-- 已实现“有序笔画实例预测 → 单笔轨迹生成”方案中的单笔阶段；第一阶段和串联尚未实现。
+- 已实现单笔阶段、独立有序笔画层和串联推理适配；笔画层尚未GPU训练，串联尚未真实效果验收。
 - 服务器训练job605已由用户要求彻底取消，进程已退出；保留全部checkpoint与现有产物。
 - 选用 `models/runs/single_stroke_full/job_605/train/best.pt`，epoch20、step120100。
 - 完整val 83,119笔：free轨迹IoU 0.8399036936，XY MAE 1.702859px，宽度MAE 1.160251px，端点L2 4.136157px。
@@ -51,8 +51,13 @@ CNN/FPN、dim64、4头、两级各2层、最大64笔/1024点、memory80，condit
 
 ## 下一阶段与清理记录
 
-第一阶段预测mask、框、有效性、起点 `(x,y,width)` 和终点XY；先冻结基础loss与独立首点宽度监督。
-串联传预测mask提取的单笔图和预测首点，第二阶段不重新预测第一点，不直接传隐藏z。
+第一阶段代码见 `models/networks/ordered_stroke.py`，训练入口 `models/scripts/train_ordered_stroke.py`。
+全量结构为Swin-T整字编码、共享ResNet18/GroupNorm历史mask编码、三尺度CLS汇聚、9层因果decoder。
+预测mask、框、有效性和起点 `(x,y,width)`；不设终点预测头或终点辅助损失。
+首版loss为4×cls+5×mask+5×dice+5×box+2×giou+5×start+1×width；宽度Charbonnier单独监督，细节见models/README。
+串联传预测mask提取的单笔图，几何条件仅传预测首点 `(x,y,width)`，与现有点层训练接口一致。第二阶段不重新预测第一点，不接收终点或隐藏z，后续点及单笔停止由点层预测。
+`models/networks/two_stage.py` 与 `models/scripts/infer_two_stage.py` 已接入该协议；没有提交笔画层服务器作业，下一步先做真实小集拟合和GPU容量验收。
+本次54项CPU检查通过；正式Swin-T/9层配置在2张真实训练图上完成4步CPU前后向，并验证2张val图的自由推理接入，记录见 `models/reports/ordered_stroke_smoke_20261028.json`。这些单笔字smoke不是多笔字拟合或GPU验收。
 方法来源：[Handwriting Trajectory Recovery via Autoregressive Ordered Stroke Instance Prediction](https://arxiv.org/html/2609.02251v1)。
 网络型号、loss细节等未核实项不能当成论文官方实现。
 

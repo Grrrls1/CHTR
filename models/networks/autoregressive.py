@@ -47,7 +47,12 @@ def attention_step(attn,q,cache,memory=None,bias=None):
         if 'key' not in cache:cache.update(key=project(memory,1),value=project(memory,2))
         key,value=cache['key'],cache['value']
     scores=bias[:,None,None,:] if bias is not None else None
-    out=F.scaled_dot_product_attention(query,key,value,attn_mask=scores,dropout_p=0.)
+    if hasattr(F,'scaled_dot_product_attention'):
+        out=F.scaled_dot_product_attention(query,key,value,attn_mask=scores,dropout_p=0.)
+    else:  # Local torch 1.13; identical scaled attention without the torch 2 API.
+        logits=(query@key.transpose(-2,-1))/query.shape[-1]**.5
+        if scores is not None:logits=logits+scores
+        out=logits.softmax(-1)@value
     return attn.out_proj(out.transpose(1,2).reshape(q.shape[0],1,dim))
 
 

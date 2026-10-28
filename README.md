@@ -29,7 +29,7 @@ Virtual Sketching 使用独立旧 TensorFlow 1 环境，当前统一全量入口
 保留 job237 作为历史基线；free rollout、三任务AR及扩散路线的后续待办均已放弃。
 单笔轨迹阶段已完成job605的epoch20完整验证，轨迹IoU为0.839904；训练已按用户要求取消，保留checkpoint。
 独立test675已进入逐批推理，评估全部68,413笔并可视化30个字符；结果待验收。
-有序笔画阶段与串联尚未实现，见 [单笔阶段说明](models/SINGLE_STROKE.md)。
+有序笔画层及串联推理代码已实现，尚待GPU训练与真实效果验收；两层设计和接口见 [模型说明](models/README.md)，点层细节见 [单笔阶段说明](models/SINGLE_STROKE.md)。
 个人电脑与服务器环境见 [环境记录](models/ENVIRONMENT.md)，本地测试见 [TEST_README](models/TEST_README.md)。
 已清理放弃路线的专用文档、实现、配置和测试，保留job237基线及数据生成管线。
 

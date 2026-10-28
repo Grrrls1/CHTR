@@ -57,7 +57,7 @@ def signature(config,catalog):
 
 def load_model(checkpoint,device):
     # Checkpoints are trusted local files, never remote/untrusted pickle payloads.
-    ck=torch.load(checkpoint,map_location=device)
+    ck=torch.load(checkpoint,map_location=device,weights_only=False)
     if ck.get('training_mode')!=MODE:raise ValueError('not a single-stroke checkpoint')
     model=SingleStrokeModel(**ck['config']['model']).to(device)
     model.load_state_dict(ck['model'])
