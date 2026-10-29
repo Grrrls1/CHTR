@@ -24,6 +24,11 @@ def small_model(**kwargs):
     return OrderedStrokeModel(**settings)
 
 
+class FirstPointOnly(torch.nn.Module):
+    def generate(self,images,first_points,**kwargs):
+        return [dict(points=p[None].clone(),terminated=True,truncated=False,stop_reason='invalid') for p in first_points]
+
+
 class OrderedDataTests(unittest.TestCase):
     def test_character_labels_terminal_padding_and_caps(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -249,9 +254,10 @@ class EvaluationTests(unittest.TestCase):
             catalog = StrokeCatalog(db, split)
             try:
                 dataset = OrderedStrokeDataset(catalog, 'val', 4)
-                config = dict(eval_batch_size=2, decode_max_strokes=4, validity_threshold=.5, visualize_characters=2)
+                config = dict(eval_batch_size=2, decode_max_strokes=4, validity_threshold=.5, visualize_characters=2,
+                              point_batch_size=2,point_decode_max_points=4,point_validity_threshold=.5)
                 model = Oracle().train()
-                report = evaluate_split(model, dataset, 'cpu', config, tmp/'eval')
+                report = evaluate_split(model, dataset, 'cpu', config, tmp/'eval',point_model=FirstPointOnly().eval())
                 self.assertTrue(model.training)
                 # Two true strokes per character. First predicts one perfect
                 # mask (IoU = 1/2), second predicts none (IoU = 0): mean 1/4.
@@ -263,6 +269,9 @@ class EvaluationTests(unittest.TestCase):
                 self.assertEqual(report['teacher_forced']['terminal_recall'], 1.)
                 self.assertTrue(report['full_split'])
                 self.assertTrue((tmp/'eval/index.html').is_file())
+                self.assertEqual(report['point_layer']['missing_strokes'],3)
+                self.assertEqual(report['point_layer']['predicted_strokes'],1)
+                self.assertIn('stroke_layer',report)
             finally:
                 catalog.close()
 
@@ -278,6 +287,12 @@ class TrainingTests(unittest.TestCase):
             config.update(dataset=str(db), split_file=str(split), train_char_limit=0, eval_char_limit=0,
                           epochs=2, batch_size=1, decode_max_strokes=3, visualize_characters=2)
             config['model'].update(dim=16, max_strokes=4)
+            from models.networks.single_stroke import SingleStrokeModel,MODE as POINT_MODE
+            point_settings=dict(dim=16,heads=4,encoder_layers=1,decoder_layers=4,max_points=4,dropout=0.)
+            point=SingleStrokeModel(**point_settings)
+            torch.save(dict(training_mode=POINT_MODE,model=point.state_dict(),epoch=20,step=120100,
+                            config=dict(model=point_settings,decode_max_points=4,validity_threshold=.5)),tmp/'point.pt')
+            config.update(point_checkpoint=str(tmp/'point.pt'),point_decode_max_points=4,point_batch_size=2)
             path = tmp/'config.json'
             path.write_text(json.dumps(config))
             def run(output, steps, resume=None):
@@ -302,7 +317,10 @@ class TrainingTests(unittest.TestCase):
             self.assertTrue(summary['full_split'])
             self.assertEqual(summary['strokes'], 4)
             self.assertFalse(summary['test_used_for_model_selection'])
-            self.assertEqual(len(list((full/'eval_epoch_002').glob('*.png'))), 2)
+            self.assertEqual(len(list((full/'eval_epoch_002').rglob('*.png'))),0)
+            self.assertEqual(len(list((full/'eval_epoch_002').rglob('character_trajectory.npz'))),2)
+            self.assertIn('point_layer',summary)
+            self.assertEqual(summary['point_checkpoint']['epoch'],20)
             cmd = [sys.executable, str(root/'models/scripts/evaluate_ordered_stroke.py'),
                    '--checkpoint', str(full/'best.pt'), '--output', str(tmp/'test'), '--split', 'test', '--limit', '1']
             result = subprocess.run(cmd, cwd=root, capture_output=True, text=True)

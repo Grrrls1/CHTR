@@ -20,7 +20,15 @@
   "decode_max_strokes": 8,
   "validity_threshold": 0.5,
   "visualize_characters": 8,
-  "loss_weights": {"cls": 4.0, "mask": 5.0, "dice": 5.0, "box": 5.0, "giou": 2.0, "start": 5.0, "width": 1.0},
+  "loss_weights": {
+    "cls": 4.0,
+    "mask": 5.0,
+    "dice": 5.0,
+    "box": 5.0,
+    "giou": 2.0,
+    "start": 5.0,
+    "width": 1.0
+  },
   "auxiliary_weight": 1.0,
   "model": {
     "dim": 32,
@@ -31,5 +39,9 @@
     "dropout": 0.0,
     "character_backbone": "resnet18",
     "history_chunk_size": 8
-  }
+  },
+  "point_checkpoint": "models/runs/single_stroke_full/job_605/train/best.pt",
+  "point_batch_size": 16,
+  "point_decode_max_points": 400,
+  "point_validity_threshold": 0.5
 }

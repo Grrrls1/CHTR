@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from models.networks.two_stage import recover_trajectories
 from models.training.ordered_stroke import load_model as load_stroke_model, local_path
 from models.training.single_stroke import load_model as load_point_model
+from models.visualization.trajectory_gallery import write_prediction_gallery
 
 
 def main():
@@ -39,6 +40,8 @@ def main():
     point.eval()
     images = torch.from_numpy(image.astype(np.float32)[None, None]/255.).to(args.device)
     result = recover_trajectories(stroke, point, images,
+        max_strokes=stroke_ck['config'].get('decode_max_strokes',stroke.max_strokes),
+        max_points=point_ck['config'].get('decode_max_points',point.max_points),
         stroke_threshold=stroke_ck['config']['validity_threshold'],
         point_threshold=point_ck['config'].get('validity_threshold', .5),
         point_batch_size=args.point_batch_size)[0]
@@ -59,6 +62,7 @@ def main():
                   protocol='masked original + predicted start XYW; no GT input',
                   units='points/starts: pixel XY and pixel diameter; boxes: inclusive pixel-center XYXY; masks: probability')
     (output/'summary.json').write_text(json.dumps(report, ensure_ascii=False, indent=2)+'\n')
+    write_prediction_gallery(output, image, trajectories)
     print(json.dumps(report, ensure_ascii=False), flush=True)
 
 

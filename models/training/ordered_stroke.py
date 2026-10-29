@@ -10,6 +10,7 @@ from models.datasets.single_stroke import StrokeCatalog
 from models.datasets.ordered_stroke import OrderedStrokeDataset
 from models.networks.ordered_stroke import OrderedStrokeModel, MODE
 from models.training.single_stroke import local_path, to_device
+from models.training.single_stroke import load_model as load_point_model
 
 
 def select_indices(dataset, limit):
@@ -49,3 +50,20 @@ def atomic_checkpoint(path, state):
     temp = path.with_name(path.name+'.tmp')
     torch.save(state, temp)
     temp.replace(path)
+
+
+def load_point_stage(config, device):
+    path=config.get('point_checkpoint')
+    if not path:
+        raise ValueError('point_checkpoint is required: validation and test always run both stages')
+    model,ck=load_point_model(local_path(path),device)
+    model.eval()
+    model.requires_grad_(False)
+    config.setdefault('point_decode_max_points',ck['config'].get('decode_max_points',model.max_points))
+    config.setdefault('point_validity_threshold',ck['config'].get('validity_threshold',.5))
+    config.setdefault('point_batch_size',16)
+    if (type(config['point_decode_max_points']) is not int or type(config['point_batch_size']) is not int
+            or not 1<=config['point_decode_max_points']<=model.max_points
+            or not 0<config['point_validity_threshold']<1 or config['point_batch_size']<1):
+        raise ValueError('invalid point-stage decoding configuration')
+    return model,dict(path=str(local_path(path)),epoch=ck.get('epoch'),step=ck.get('step'))

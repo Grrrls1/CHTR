@@ -175,7 +175,14 @@ class EvaluationTests(unittest.TestCase):
                     self.assertEqual(report['free']['terminated_rate'],1.)
                     self.assertEqual(report['free']['point_count_mae'],1.)
                     self.assertEqual(report['visualized_characters'],2)
-                    self.assertEqual(len(list((root/name).rglob('*.npz'))),4)
+                    self.assertEqual(len(list((root/name).rglob('stroke[0-9]*.npz'))),0)
+                    self.assertEqual(len(list((root/name).rglob('*.npz'))),2)
+                    for sid in fixed:
+                        with np.load(root/name/sid/'character_trajectory.npz') as data:
+                            self.assertEqual(data['stroke_offsets'].tolist(),[0,1,2])
+                            self.assertEqual(data['ground_truth_stroke_offsets'].tolist(),[0,1,4])
+                            self.assertTrue(bool(data['complete_character']))
+                        self.assertEqual(len(list((root/name/sid).iterdir())),2)
                     self.assertEqual(len((root/name/'strokes.jsonl').read_text().splitlines()),4)
                     self.assertTrue(all((root/name/sid/'index.html').exists() for sid in fixed))
             finally:catalog.close()
@@ -257,7 +264,9 @@ class TrainingIntegrationTests(unittest.TestCase):
             self.assertEqual(report['strokes'],1)
             self.assertTrue(json.loads((output/'strokes.jsonl').read_text().splitlines()[0])['first_xyz_exact'])
             self.assertTrue((output/'index.html').exists())
-            self.assertEqual(len(list(output.rglob('*.npz'))),1)
+            self.assertEqual(len(list(output.rglob('stroke[0-9]*.npz'))),0)
+            with np.load(next(output.rglob('character_trajectory.npz'))) as data:
+                self.assertFalse(bool(data['complete_character']))
 
 
 if __name__=='__main__':unittest.main()

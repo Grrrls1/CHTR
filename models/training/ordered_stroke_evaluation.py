@@ -1,23 +1,25 @@
-"""Teacher-forced diagnostics and image-only ordered-mask validation.
+"""Stage-one diagnostics and full image-only mask-to-trajectory validation.
 
 All free geometric comparisons are by sequence index, not Hungarian matching.
 Missing and extra strokes contribute zero to count-penalized ordered mask IoU.
-These diagnostics are not COCO Mask AP or a full trajectory evaluation.
+Mask diagnostics are not COCO Mask AP. Frozen-stage-two cascade metrics are
+reported separately, including count-penalized trajectory IoU.
 """
 import hashlib
-import html
 import json
 from pathlib import Path
 import time
 
 import numpy as np
 import torch
-from PIL import Image, ImageDraw
 from torch.nn import functional as F
 
 from models.datasets.ordered_stroke import collate_ordered_strokes
 from models.losses.ordered_stroke import ordered_stroke_loss
 from models.training.ordered_stroke import to_device
+from models.networks.two_stage import decode_stroke_instances
+from models.training.two_stage_metrics import compare_trajectories, summarize
+from models.visualization.trajectory_gallery import write_compact_gallery, write_evaluation_index
 
 
 def binary_iou(a, b):
@@ -26,34 +28,10 @@ def binary_iou(a, b):
     return intersection/union.clamp_min(1)
 
 
-def save_gallery_sample(output, sample, result):
-    token = hashlib.sha256(sample['sample_id'].encode()).hexdigest()[:20]
-    original = np.uint8(np.clip(sample['image'][0].numpy()*255, 0, 255))
-    images = [Image.fromarray(original).convert('RGB')]
-    colors = [(220, 50, 50), (40, 130, 220), (40, 170, 80), (190, 80, 210), (220, 140, 30)]
-    for masks, starts in ((sample['masks'], sample['starts']), (result['masks'], result['starts'])):
-        canvas = np.full((256, 256, 3), 255, np.uint8)
-        for i, mask in enumerate(masks):
-            canvas[mask.cpu().numpy() >= .5] = colors[i % len(colors)]
-        im = Image.fromarray(canvas)
-        draw = ImageDraw.Draw(im)
-        for i, start in enumerate(starts):
-            x, y = (start[:2].cpu().numpy()*255).tolist()
-            draw.ellipse((x-2, y-2, x+2, y+2), fill=(0, 0, 0))
-            draw.text((x+3, y), str(i+1), fill=(0, 0, 0))
-        images.append(im)
-    montage = Image.new('RGB', (768, 256), 'white')
-    for i, im in enumerate(images):
-        montage.paste(im, (i*256, 0))
-    montage.save(output/(token+'.png'))
-    np.savez_compressed(output/(token+'.npz'), masks=result['masks'].cpu().numpy(),
-                        starts=result['starts'].cpu().numpy(), boxes=result['boxes'].cpu().numpy(),
-                        confidences=result['confidences'].cpu().numpy())
-    return f'<p>{html.escape(sample["sample_id"])}: original / GT / prediction</p><img src="{token}.png" width="768">'
-
-
 @torch.no_grad()
-def evaluate_split(model, dataset, device, config, output, indices=None, checkpoint=None):
+def evaluate_split(model, dataset, device, config, output, indices=None, checkpoint=None, *, point_model=None, point_checkpoint=None):
+    if point_model is None or point_model.training:
+        raise ValueError("full-pipeline evaluation requires a frozen eval-mode point model")
     indices = list(range(len(dataset))) if indices is None else list(indices)
     if not indices or len(set(indices)) != len(indices) or min(indices) < 0 or max(indices) >= len(dataset):
         raise ValueError('evaluation requires unique, in-range samples')
@@ -64,6 +42,7 @@ def evaluate_split(model, dataset, device, config, output, indices=None, checkpo
     was_training = model.training
     model.eval()
     rows, sums, tf, gallery = [], {}, {}, []
+    point_rows, titles = [], {}
     tf_strokes = tf_valid_correct = tf_terminal_correct = 0
     gallery_count = min(config.get('visualize_characters', 30), len(indices))
     selected = {indices[int(i)] for i in np.linspace(0, len(indices)-1, gallery_count, dtype=int)}
@@ -93,7 +72,9 @@ def evaluate_split(model, dataset, device, config, output, indices=None, checkpo
                 tf_strokes += int(valid.sum())
                 del prediction
                 results = model.generate(batch['images'], config['decode_max_strokes'], config['validity_threshold'])
-                for index, sample, result in zip(batch_indices, samples, results):
+                cascades = decode_stroke_instances(point_model,batch['images'],results,
+                    config['point_decode_max_points'],config['point_validity_threshold'],config['point_batch_size'])
+                for index, sample, result, cascade in zip(batch_indices, samples, results, cascades):
                     n, m = len(sample['masks']), len(result['masks'])
                     common = min(n, m)
                     ious = binary_iou(result['masks'][:common] >= .5, sample['masks'][:common].to(device).bool())
@@ -112,10 +93,25 @@ def evaluate_split(model, dataset, device, config, output, indices=None, checkpo
                                    aligned_start_width_bias_px=float(error[:, 2].mean()*256))
                     for key in ('stroke_count_mae', 'count_exact', 'ordered_mask_iou', 'strict_sequence_mask50', 'terminated', 'truncated'):
                         sums[key] = sums.get(key, 0.)+row[key]
+                    point_row,pred_paths=compare_trajectories(sample['trajectories_xyw_px'],cascade['strokes'])
+                    point_rows.append(point_row)
+                    row['point_layer']=point_row
+                    row['point_stop_reasons']=[p['stop_reason'] for p in cascade['strokes']]
                     rows.append(row)
                     stream.write(json.dumps(row, ensure_ascii=False)+'\n')
                     if index in selected:
-                        gallery.append(save_gallery_sample(output, sample, result))
+                        token=hashlib.sha256(sample['sample_id'].encode()).hexdigest()[:20]
+                        title=sample.get('character','')+' '+sample['sample_id']
+                        titles[token]=title
+                        gallery.append(token)
+                        image=np.rint(sample['image'][0].numpy()*255).astype(np.uint8)
+                        write_compact_gallery(output/token,title,image,sample['trajectories_xyw_px'],pred_paths,
+                            gt_masks=sample['masks'].numpy(),pred_masks=result['masks'].cpu().numpy(),metadata=row,
+                            extra_arrays=dict(predicted_masks=result['masks'].cpu().numpy(),
+                                predicted_starts_xyw_px=result['starts'].cpu().numpy()*[255,255,256],
+                                predicted_boxes_xyxy_px=result['boxes'].cpu().numpy()*255,
+                                predicted_confidences=result['confidences'].cpu().numpy(),
+                                point_stop_reasons=np.asarray(row['point_stop_reasons'],dtype='U16')))
                 stream.flush()
                 completed = len(rows)
                 elapsed = time.monotonic()-began
@@ -133,14 +129,17 @@ def evaluate_split(model, dataset, device, config, output, indices=None, checkpo
         report = dict(split=dataset.split, characters=total, strokes=tf_strokes,
                       full_split=len(indices) == len(dataset), dataset_fingerprint=dataset.catalog.fingerprint,
                       checkpoint=checkpoint, teacher_forced=tf, free=free,
-                      selection_metric='free.ordered_mask_iou', evaluation_protocol='ordered_mask_index_v1',
+                      stroke_layer=dict(teacher_forced=tf,free=free),point_layer=summarize(point_rows),
+                      point_checkpoint=point_checkpoint,visualization_ids=gallery,
+                      selection_metric='free.ordered_mask_iou', evaluation_protocol='ordered_masks_to_point_trajectories_v2',
                       geometry_alignment='sequence index; missing/extra strokes get zero ordered IoU',
                       validity_threshold=config['validity_threshold'], decode_max_strokes=config['decode_max_strokes'],
                       mask_threshold=.5, visualized_characters=len(gallery),
+                      point_decode_max_points=config['point_decode_max_points'],
+                      point_validity_threshold=config['point_validity_threshold'],
                       test_used_for_model_selection=False)
         (output/'summary.json').write_text(json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False)+'\n')
-        (output/'index.html').write_text('<!doctype html><meta charset="utf-8"><title>Ordered strokes</title>'
-                                        '<h1>Original / GT / predicted masks</h1>'+''.join(gallery))
+        write_evaluation_index(output,report,titles)
         return report
     finally:
         model.train(was_training)

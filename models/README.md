@@ -2,14 +2,15 @@
 
 当前主线是“有序笔画预测 → 单笔轨迹生成”。两层代码和串联推理适配器已实现，分别独立训练。
 点层已完成 job605 全量训练的前20轮验证；笔画层尚未进行GPU训练或真实数据效果验收，串联尚无训练后效果结论。
-计划见 [TODO](TODO.md)，接口和评估协议见 [SINGLE_STROKE](SINGLE_STROKE.md)。
+计划见 [TODO](TODO.md)，点层协议见 [SINGLE_STROKE](SINGLE_STROKE.md)，笔画层探索、全量训练和两阶段评估见 [ORDERED_STROKE](ORDERED_STROKE.md)。
+`summary.json`各项指标的定义、单位、计算口径及示例见 [SUMMARY_METRICS](SUMMARY_METRICS.md)。
 
 ## 当前状态（2026-10-28）
 
 - job605 已按用户要求彻底取消，checkpoint 和训练、验证产物保留。
 - 选用 `runs/single_stroke_full/job_605/train/best.pt`：epoch 20、step 120100。
 - 完整验证集83,119笔：自由生成轨迹 IoU **0.839904**、坐标 MAE **1.702859 px**、宽度 MAE **1.160251 px**、端点 L2 **4.136157 px**。
-- test675 已提交并开始逐批推理：完整68,413笔，batch32，30个字符可视化。最终结果以输出目录中的 `summary.json` 为准，不把运行状态当作已完成结论。
+- test675已完成：68,413笔，点层条件自由生成IoU 0.839153、XY MAE 1.706272px；这是给定真实mask与首点的独立点层结果。
 - 当前输入为真实笔画 mask 覆盖规范化整字原图，区域外填白，并提供真实首点 `(x,y,width)`；后续点自由生成。这是单笔条件评估。
 - 笔画层新增独立 Dataset、模型、损失、可恢复训练、自由推理评估和Slurm入口；不覆盖job237或job605。
 
@@ -116,7 +117,7 @@ CLS跨注意力聚合、GroupNorm、FPN与多尺度memory安排、损失平均�
 ```
 
 服务器提交入口为 `gpu-sbatch --user_name lkh models/scripts/train_ordered_stroke.slurm`。
-该脚本会启动新训练；本次仅实现入口，未提交，先完成固定小集拟合及GPU容量验收后再扩大规模。
+脚本可接收配置路径作为首个参数，默认全量配置；探索使用 `configs/ordered_stroke_explore.json`。当前val与独立val/test均串联冻结的job605点层，详见 [完整运行说明](ORDERED_STROKE.md)。本次不自动提交训练。
 新run必须使用空目录；产物包括config、data_usage、metrics、last/best和每次验证的summary、逐字JSONL、mask/首点图与预测NPZ。
 checkpoint包含优化器、epoch内游标和随机状态，恢复时核验数据/配置签名。
 
@@ -132,10 +133,10 @@ checkpoint包含优化器、epoch内游标和随机状态，恢复时核验数�
   --output models/runs/ordered_stroke_smoke/eval_val_manual --split val --device cpu
 ```
 
-自由推理报告按序mask IoU、严格序列mask@0.5、笔数误差、首点XY/宽度误差及偏差、空mask、正常停止与截断。
+自由推理同时报告笔画层与完整串联点层指标。笔画层包括按序mask IoU、严格序列mask@0.5、笔数误差、首点XY/宽度误差及偏差、空mask、正常停止与截断；点层包括整字/按序轨迹IoU、已对齐XY/宽度/端点/点数误差与截断。
 按序IoU逐位置比较，漏笔/多笔补零，除以预测与真实笔数的较大者，再对字平均；严格序列指标要求笔数相同且每个对应mask IoU≥0.5。
 首点误差仅对共同序号报告，漏笔后可能错配，另报参与比较的笔数；正常停止率不是停止正确率。
-这些是明确的本地诊断指标，不是COCO Mask AP、最优匹配指标或完整轨迹分数；TF指标独立列在summary中。
+笔画mask指标不是COCO Mask AP或最优匹配指标；串联点层轨迹指标另列于 `point_layer`，TF辅助指标独立报告。
 
 笔画层取得已训练checkpoint后，可用纯图片串联入口（输入须已规范化到同一256画布）：
 
@@ -145,7 +146,7 @@ checkpoint包含优化器、epoch内游标和随机状态，恢复时核验数�
   --image PATH_TO_IMAGE_256.png --output models/runs/two_stage_example --device cpu
 ```
 
-输出 `prediction.npz` 保存像素XYW、笔画offsets、预测mask、首点与框；`summary.json`记录两层checkpoint及各自停止原因。
+输出 `prediction.npz` 保存像素XYW、笔画offsets、预测mask、首点与框；`summary.json`记录两层checkpoint及各自停止原因，HTML仅展示整字覆盖和走向。
 该入口不要求标签；当前尚无训练后的笔画层权重，不能据此声称完成整字恢复效果验收。
 
 ## 数据与输出
@@ -173,6 +174,7 @@ gpu-sbatch --user_name lkh models/scripts/test_single_stroke_job605.slurm
 ```
 
 当前测试结果：`runs/single_stroke_full/job_605/test_job_675/`，包括 `summary.json`、逐笔 `strokes.jsonl`、30个字符的 `index.html` 和轨迹NPZ。
+新评估仅输出整字GT/预测覆盖与走向，保留起终点、方向箭头和笔顺播放；每字仅一个HTML和一个整字NPZ，不再生成逐笔文件。旧图库保持原样，本次不补做历史可视化。
 实时日志：
 
 ```bash

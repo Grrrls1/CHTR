@@ -13,6 +13,14 @@ def recover_trajectories(stroke_model, point_model, images, max_strokes=None,
     if images.shape[1:] != (1, 256, 256) or not torch.isfinite(images).all() or (images < 0).any() or (images > 1).any():
         raise ValueError('expected finite Bx1x256x256 grayscale in [0,1]')
     instances = stroke_model.generate(images, max_strokes=max_strokes, threshold=stroke_threshold)
+    return decode_stroke_instances(point_model, images, instances, max_points, point_threshold, point_batch_size)
+
+
+@torch.no_grad()
+def decode_stroke_instances(point_model, images, instances, max_points=None, point_threshold=.5, point_batch_size=32):
+    """Consume already generated instances once, without re-running stage one."""
+    if point_model.training or point_batch_size < 1 or len(instances) != len(images):
+        raise ValueError('eval-mode point model, positive batch size and one instance group per image required')
     output = [dict(instances=r, strokes=[], terminated=r['terminated'], truncated=r['truncated']) for r in instances]
     owners = [(i, k) for i, r in enumerate(instances) for k in range(len(r['starts']))]
     for offset in range(0, len(owners), point_batch_size):

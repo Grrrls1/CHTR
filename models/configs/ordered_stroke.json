@@ -6,7 +6,7 @@
   "seed": 42,
   "device": "auto",
   "threads": 4,
-  "batch_size": 2,
+  "batch_size": 8,
   "epochs": 200,
   "max_steps": 0,
   "train_char_limit": 0,
@@ -20,7 +20,15 @@
   "decode_max_strokes": 64,
   "validity_threshold": 0.5,
   "visualize_characters": 30,
-  "loss_weights": {"cls": 4.0, "mask": 5.0, "dice": 5.0, "box": 5.0, "giou": 2.0, "start": 5.0, "width": 1.0},
+  "loss_weights": {
+    "cls": 4.0,
+    "mask": 5.0,
+    "dice": 5.0,
+    "box": 5.0,
+    "giou": 2.0,
+    "start": 5.0,
+    "width": 1.0
+  },
   "auxiliary_weight": 1.0,
   "model": {
     "dim": 64,
@@ -31,5 +39,9 @@
     "dropout": 0.0,
     "character_backbone": "swin_t",
     "history_chunk_size": 16
-  }
+  },
+  "point_checkpoint": "models/runs/single_stroke_full/job_605/train/best.pt",
+  "point_batch_size": 16,
+  "point_decode_max_points": 400,
+  "point_validity_threshold": 0.5
 }

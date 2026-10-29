@@ -34,6 +34,7 @@ class OrderedStrokeDataset(Dataset):
                     masks=torch.from_numpy(masks.astype(np.float32)),
                     boxes=torch.tensor(boxes, dtype=torch.float32),
                     starts=torch.from_numpy(starts), sample_id=sid,
+                    trajectories_xyw_px=[points[a:b].copy() for a,b in zip(offsets[:-1],offsets[1:])],
                     character=self.catalog.rows[sid]['character'])
 
 

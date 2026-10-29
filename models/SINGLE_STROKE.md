@@ -1,7 +1,7 @@
 # 两阶段书法迁移：单笔轨迹阶段
 
 当前已实现独立第二阶段，完成CPU smoke、全量资产接入审核及服务器job605的完整训练/验证运行。
-job605已取消，保留epoch20的best.pt；完整val轨迹IoU为0.839904。test675正在独立评估全部68,413笔并可视化30字，结果待验收。
+job605已取消，保留epoch20的best.pt；完整val轨迹IoU为0.839904。test675已完成全部68,413笔，条件自由生成IoU为0.839153；历史30字图库保留。
 有序笔画层与串联推理代码已实现，尚待GPU训练及真实效果验收；两层设计与协议见 [README](README.md)。
 本阶段评估给定真实mask与首点 `(x,y,width)`，不是完整image-only推理。
 
@@ -126,7 +126,7 @@ early_stopping仍为patience=10、min_delta=0.001、min_epochs=20，但patience�
 
 运行初始化时从val按笔画数跨度确定性选择30个不同字符的样本，冻结实际sample_id到
 `visualization_selection.json` 和 `data_usage.json`，resume时校验不变。
-每次完整验证仍评估全部笔画，只对固定30字的全部笔画保存图像和NPZ。
+每次完整验证仍评估全部笔画。新图库每个选中字图只保存整字HTML和整字NPZ，内嵌GT/预测覆盖与走向，不再输出逐笔文件；历史结果不补做。
 
 ```text
 train/
@@ -137,10 +137,8 @@ train/
     strokes.jsonl     # 全部验证笔画的自由解码指标
     index.html        # 固定30字总览：原图/真实轨迹/预测轨迹
     <sample_id>/
-      index.html     # 该字全部笔画及真实/预测宽度曲线
-      original.png / gt.png / pred.png
-      stroke000_input.png / stroke000_gt.png / stroke000_pred.png
-      stroke000.npz  # 像素坐标及宽度的真实/预测序列
+      index.html                 # 整字覆盖、走向、起终点及笔顺播放；图像内嵌
+      character_trajectory.npz   # 整字预测与GT像素XYW、各自offsets、原图及完整性
   eval_total_epoch_020/ ...
   test_best/
 ```
@@ -168,7 +166,7 @@ gpu-srun --user_name "$(id -un)" --ntasks=1 --gres=gpu:1 --cpus-per-task=4 --mem
 
 历史CPU合成夹具验证覆盖：完整划分覆盖、只按epoch调度、固定字图库、批量/单笔
 解码一致、混合停止长度、最终完整test、因果性、padding、loss梯度、早停及中途恢复逐参数一致。
-job605已实际运行batch96训练及83,119笔完整val。独立test675已开始推理；GPU容量和速度取决于具体机器与batch，不能由服务器结论推定个人电脑可用batch。
+job605已实际运行batch96训练及83,119笔完整val。独立test675已完成；GPU容量和速度取决于具体机器与batch，不能由服务器结论推定个人电脑可用batch。
 历史全量资产审核见 [2026-10-23记录](reports/single_stroke_smoke_20261023.json)，
 本机元数据指纹核验见 [2026-10-26记录](reports/local_dataset_split_20261026.json)。
 
@@ -178,3 +176,9 @@ job605已实际运行batch96训练及83,119笔完整val。独立test675已开始
 `runs/single_stroke_full/job_605/test_job_675/`。启动打印checkpoint加载、元数据读取/划分校验等阶段；
 每15秒打印阶段心跳，评估时每批打印完成数、百分比、平均速度与ETA。
 心跳只表示日志线程仍在运行，不保证I/O有进展。个人电脑命令见 [TEST_README](TEST_README.md)。
+
+## 笔画层val/test的全流程评估
+
+`evaluate_single_stroke.py`仍保留真实mask/首点条件下的独立点层诊断；
+笔画层训练val和 `evaluate_ordered_stroke.py` 的val/test则全部消费预测mask与预测首点，串联冻结的job605点层。
+完整配置、两层指标、精简图库和手动训练命令见 [ORDERED_STROKE](ORDERED_STROKE.md)。

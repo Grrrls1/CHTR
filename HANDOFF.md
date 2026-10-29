@@ -9,7 +9,7 @@
 - 服务器训练job605已由用户要求彻底取消，进程已退出；保留全部checkpoint与现有产物。
 - 选用 `models/runs/single_stroke_full/job_605/train/best.pt`，epoch20、step120100。
 - 完整val 83,119笔：free轨迹IoU 0.8399036936，XY MAE 1.702859px，宽度MAE 1.160251px，端点L2 4.136157px。
-- 独立test675已启动并进入逐批推理：全部68,413笔、batch32、30个字符可视化。输出 `models/runs/single_stroke_full/job_605/test_job_675/`；结果以summary.json为准。
+- 独立test675已完成：68,413笔，IoU 0.839153、坐标MAE 1.706272px；原输出保留。
 - test672因I/O等待已取消。当前独立入口输出初始化阶段、15秒心跳、逐批进度/速度/ETA，心跳不代表数据读取一定有进展。
 - 后续优先确认test完成及查看失败样本，不自行重新启动训练。新计算按用户指令通过Slurm执行。
 
@@ -63,3 +63,10 @@ CNN/FPN、dim64、4头、两级各2层、最大64笔/1024点、memory80，condit
 
 已按用户要求删除放弃的free rollout、旧三任务分层AR、扩散/Flow Matching专用文档、实现、配置与测试。
 保留job237基线、当前单笔阶段、共享模块及数据生成管线；本次不删除任何训练权重、数据或已有实验产物。
+
+## 当前输出与全流程评估
+
+笔画层训练val及独立val/test都将预测mask/首点送入冻结的job605点层，分别报告两层指标。
+新图库仅保留整字GT/预测覆盖、方向和笔顺播放，每字一个HTML与一个NPZ，无逐笔文件；不补做旧图库。
+探索配置为 `models/configs/ordered_stroke_explore.json`，全量配置为 `ordered_stroke.json`。
+手动Slurm启动及指标定义见 [ORDERED_STROKE](models/ORDERED_STROKE.md)，本次不提交训练。

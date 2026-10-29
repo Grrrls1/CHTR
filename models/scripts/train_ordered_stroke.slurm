@@ -16,16 +16,21 @@ export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 : "${CUDA_VISIBLE_DEVICES:?Slurm must allocate a GPU}"
 : "${SLURM_JOB_ID:?Submit with gpu-sbatch}"
 TRAIN_PY=/home/lkh/workspace/CHTR/third_party/StrokeExtraction/.venv/bin/python
+CONFIG="${1:-models/configs/ordered_stroke.json}"
+if (( $# )); then shift; fi
 TRAIN_ROOT="models/runs/ordered_stroke_full/job_${SLURM_JOB_ID}"
 [[ -x "$TRAIN_PY" ]]
 [[ -f data/chtr_mmah_lmdb/complete.json ]]
+[[ -f "$CONFIG" ]]
 [[ ! -e "$TRAIN_ROOT" ]]
 exec 9>/home/lkh/workspace/CHTR/data/.chtr_mmah_lmdb.lock
 flock -s 9
 mkdir -p "$TRAIN_ROOT"
-cp models/configs/ordered_stroke.json "$TRAIN_ROOT/input_config.json"
+cp "$CONFIG" "$TRAIN_ROOT/input_config.json"
 cp models/scripts/train_ordered_stroke.slurm "$TRAIN_ROOT/job.slurm"
 srun "$TRAIN_PY" models/scripts/check_environment.py \
   --require-cuda --require-torchvision --device cuda:0 --output-json "$TRAIN_ROOT/environment.json"
-srun "$TRAIN_PY" models/scripts/train_ordered_stroke.py \
-  --config "$TRAIN_ROOT/input_config.json" --output-dir "$TRAIN_ROOT/train" --device cuda:0
+printf 'Job=%s\nConfig=%s\nOutput=%s\nCUDA_VISIBLE_DEVICES=%s\n' \
+  "$SLURM_JOB_ID" "$CONFIG" "$TRAIN_ROOT" "$CUDA_VISIBLE_DEVICES"
+srun --unbuffered "$TRAIN_PY" -u models/scripts/train_ordered_stroke.py \
+  --config "$TRAIN_ROOT/input_config.json" --output-dir "$TRAIN_ROOT/train" --device cuda:0 "$@"

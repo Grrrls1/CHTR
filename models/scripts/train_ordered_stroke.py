@@ -1,4 +1,4 @@
-"""Independent stage-one teacher-forced training with image-only validation."""
+"""Stage-one training with full-cascade validation through a frozen point model."""
 import argparse
 import json
 from pathlib import Path
@@ -14,7 +14,7 @@ from models.datasets.ordered_stroke import collate_ordered_strokes
 from models.networks.ordered_stroke import OrderedStrokeModel, MODE
 from models.losses.ordered_stroke import ordered_stroke_loss
 from models.training.ordered_stroke import (local_path, to_device, make_catalog, make_dataset,
-                                            select_indices, signature, atomic_checkpoint)
+                                            select_indices, signature, atomic_checkpoint, load_point_stage)
 from models.training.ordered_stroke_evaluation import evaluate_split
 
 
@@ -63,6 +63,8 @@ def main():
             raise ValueError('resume must use the same run directory')
     elif output.exists() and any(output.iterdir()):
         raise ValueError('new run requires an empty output directory')
+    print('[ordered-train] loading frozen point checkpoint for full-pipeline validation',flush=True)
+    point_model,point_ref=load_point_stage(config,device)
     print('[ordered-train] loading catalog and validating fixed split', flush=True)
     catalog = make_catalog(config)
     try:
@@ -93,7 +95,8 @@ def main():
                      train_ids=[train.ids[i] for i in train_indices], val_ids=[val.ids[i] for i in val_indices],
                      full_train=len(train_indices) == len(train), full_val=len(val_indices) == len(val),
                      test_used_for_model_selection=False, geometry_condition='start XYW only; no end point',
-                     history='BOS + preceding binary masks, causal; K valid targets + one invalid')
+                     history='BOS + preceding binary masks, causal; K valid targets + one invalid',
+                     point_checkpoint=point_ref,point_model_frozen=True)
         (output/'data_usage.json').write_text(json.dumps(usage, ensure_ascii=False, indent=2)+'\n')
 
         def save():
@@ -145,14 +148,15 @@ def main():
                             backup = output/f'eval_epoch_{epoch:03d}_uncommitted_{step}_{suffix}'
                         target.rename(backup)
                     report = evaluate_split(model, val, device, config, target, val_indices,
-                                            checkpoint=dict(epoch=epoch, step=step))
+                                            checkpoint=dict(epoch=epoch, step=step),
+                                            point_model=point_model,point_checkpoint=point_ref)
                     score = report['free']['ordered_mask_iou']
                     improved = best is None or score > best
                     if improved:
                         best = score
                     last_evaluated_epoch = epoch
                     record = dict(kind='validation', epoch=epoch, step=step, full_split=report['full_split'],
-                                  free=report['free'], best_val_ordered_iou=best)
+                                  free=report['free'],point_layer=report['point_layer'], best_val_ordered_iou=best)
                     log.write(json.dumps(record)+'\n')
                     log.flush()
                     save()

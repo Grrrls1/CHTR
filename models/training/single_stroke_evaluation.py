@@ -1,5 +1,4 @@
 """Full-split free decoding and fixed-character galleries for stage two."""
-import html
 import json
 import time
 from pathlib import Path
@@ -11,6 +10,7 @@ import torch
 from models.datasets.single_stroke import collate_single_strokes
 from models.losses.single_stroke import single_stroke_loss
 from models.training.single_stroke import to_device
+from models.visualization.trajectory_gallery import write_compact_gallery, write_evaluation_index
 
 
 def visualization_ids(dataset, count=30):
@@ -60,14 +60,6 @@ def overlay(image, mask):
     result = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
     result[mask] = (60, 60, 220)
     return result
-
-
-def width_curve(gt, pred):
-    scale = max(float(gt[:, 2].max()), float(pred[:, 2].max()), 1.)
-    def poly(p, color):
-        coords = ' '.join(f'{i*250/max(len(p)-1,1):.2f},{95-float(w)*90/scale:.2f}' for i,w in enumerate(p[:,2]))
-        return f'<polyline fill="none" stroke="{color}" points="{coords}" />'
-    return '<svg viewBox="0 0 256 100" width="256">'+poly(gt, 'black')+poly(pred, 'red')+'</svg>'
 
 
 @torch.no_grad()
@@ -126,18 +118,11 @@ def evaluate_split(model, dataset, device, config, output, fixed_ids=None, indic
                     log.write(json.dumps(row, ensure_ascii=False)+'\n')
                     if s['sample_id'] in selected:
                         sid = s['sample_id']; folder = output/sid; folder.mkdir(exist_ok=True)
-                        image = np.rint(s['image'][0].numpy()*255).astype(np.uint8)
-                        tag = f'stroke{s["stroke_index"]:03d}'
-                        for kind, picture in [('input', image), ('gt', overlay(image, gt_mask)), ('pred', overlay(image, pred_mask))]:
-                            cv2.imwrite(str(folder/f'{tag}_{kind}.png'), picture)
-                        np.savez_compressed(folder/f'{tag}.npz', ground_truth_xyw_px=gt, predicted_xyw_px=pred)
                         if sid not in groups:
                             original = dataset.catalog.character_assets(sid)[0]
-                            groups[sid] = [original, np.zeros_like(gt_mask), np.zeros_like(pred_mask)]
-                        groups[sid][1] |= gt_mask; groups[sid][2] |= pred_mask
-                        cards.setdefault(sid, []).append('<article>'+''.join(
-                            f'<img width="256" src="{tag}_{kind}.png" alt="{kind}">' for kind in ('input','gt','pred'))
-                            +width_curve(gt,pred)+'<pre>'+html.escape(json.dumps(row,ensure_ascii=False,indent=2))+'</pre></article>')
+                            groups[sid] = [original, []]
+                        groups[sid][1].append((s['stroke_index'],gt,pred))
+                        cards.setdefault(sid, []).append(row)
                 if (progress_every and ((start//batch_size+1)%progress_every==0 or count==len(indices))) or count % max(batch_size, 1024//batch_size*batch_size) == 0:
                     elapsed=time.monotonic()-started
                     rate=count/max(elapsed,1e-9)
@@ -158,20 +143,19 @@ def evaluate_split(model, dataset, device, config, output, fixed_ids=None, indic
                        visualized_characters=len(cards),
                        metric_notes='IoU uses identical XY/diameter rasterization of GT and prediction. Resampled errors compare equal normalized sequence progress, exclude the given first point, and are not DTW. Stroke metrics are averaged equally; validity recalls use global point counts.')
         (output/'summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n')
-        links = []
+        titles = {}
         for sid in fixed_ids:
             if sid not in cards:continue
-            original, gt_mask, pred_mask = groups[sid]
+            original, paths = groups[sid]
             folder = output/sid
-            cv2.imwrite(str(folder/'original.png'), original)
-            cv2.imwrite(str(folder/'gt.png'), overlay(original,gt_mask))
-            cv2.imwrite(str(folder/'pred.png'), overlay(original,pred_mask))
-            title = html.escape(dataset.catalog.rows[sid]['character']+' '+sid)
-            (folder/'index.html').write_text('<meta charset="utf-8"><h1>'+title+'</h1><p>Input / GT / free prediction; width: black=GT, red=prediction.</p>'+''.join(cards[sid]))
-            links.append(f'<section><h2><a href="{sid}/index.html">{title}</a></h2>'+''.join(
-                f'<img width="256" src="{sid}/{kind}.png" alt="{kind}">' for kind in ('original','gt','pred'))+'</section>')
-        (output/'index.html').write_text('<meta charset="utf-8"><title>Single stroke evaluation</title><h1>Label-conditioned free decoding</h1><pre>'
-            +html.escape(json.dumps(summary,ensure_ascii=False,indent=2))+'</pre>'+''.join(links))
+            paths.sort(key=lambda row: row[0])
+            title = dataset.catalog.rows[sid]['character']+' '+sid
+            titles[sid] = title
+            indices_saved=[r[0] for r in paths]
+            write_compact_gallery(folder,title,original,[r[1] for r in paths],[r[2] for r in paths],
+                                  indices=indices_saved,complete=indices_saved==list(range(dataset.catalog.rows[sid]['stroke_count'])),
+                                  metadata=cards[sid])
+        write_evaluation_index(output, summary, titles)
         return summary
     finally:
         model.train(was_training)

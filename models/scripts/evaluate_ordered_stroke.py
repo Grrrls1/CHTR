@@ -1,4 +1,4 @@
-"""Explicit stage-one validation/test; never selects a checkpoint from test."""
+"""Full two-stage validation/test; never selects a checkpoint from test."""
 import argparse
 import json
 from pathlib import Path
@@ -7,7 +7,7 @@ import sys
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from models.training.ordered_stroke import load_model, make_catalog, make_dataset, select_indices, local_path
+from models.training.ordered_stroke import load_model, make_catalog, make_dataset, select_indices, local_path, load_point_stage
 from models.training.ordered_stroke_evaluation import evaluate_split
 
 
@@ -18,6 +18,8 @@ def main():
     parser.add_argument('--split', choices=('train', 'val', 'test'), default='val')
     parser.add_argument('--device', default='cpu')
     parser.add_argument('--batch-size', type=int)
+    parser.add_argument('--point-checkpoint', help='override the frozen point checkpoint from training config')
+    parser.add_argument('--point-batch-size', type=int)
     parser.add_argument('--limit', type=int, default=0, help='0 evaluates the full split, independent of smoke config')
     args = parser.parse_args()
     if args.limit < 0 or (args.batch_size is not None and args.batch_size < 1):
@@ -28,13 +30,20 @@ def main():
     torch.set_num_threads(config['threads'])
     if args.batch_size is not None:
         config['eval_batch_size'] = args.batch_size
+    if args.point_checkpoint is not None:
+        config['point_checkpoint']=args.point_checkpoint
+    if args.point_batch_size is not None:
+        config['point_batch_size']=args.point_batch_size
+    print('[ordered-eval] loading frozen point stage',flush=True)
+    point_model,point_ref=load_point_stage(config,args.device)
     print('[ordered-eval] loading catalog and validating fixed split', flush=True)
     catalog = make_catalog(config)
     try:
         dataset = make_dataset(catalog, args.split, config)
         indices = select_indices(dataset, args.limit)
         report = evaluate_split(model, dataset, args.device, config, local_path(args.output), indices,
-                                checkpoint=dict(path=str(local_path(args.checkpoint)), epoch=ck['epoch'], step=ck['step']))
+                                checkpoint=dict(path=str(local_path(args.checkpoint)), epoch=ck['epoch'], step=ck['step']),
+                                point_model=point_model,point_checkpoint=point_ref)
         print(json.dumps(report, ensure_ascii=False), flush=True)
     finally:
         catalog.close()

@@ -116,8 +116,8 @@ cd /home/lkh/vscode/CHTR
 
 - `summary.json`：整体指标、checkpoint epoch/step、是否完整评估、实际可视化数量。
 - `strokes.jsonl`：每条笔画的自由生成指标。
-- `index.html`：可视化总览，用浏览器打开。
-- 各样本子目录：原图、GT/预测叠加图、逐笔图、轨迹 NPZ 和详情页。
+- `index.html`：GT与预测的整字覆盖总览；进入字符详情查看走向并播放笔顺。
+- 各样本子目录：一个整字HTML和一个整字轨迹NPZ；图像内嵌于HTML。
 
 必须使用尚不存在的 `--output` 目录；重复运行时换一个新目录名。
 checkpoint 和配置内的数据路径相对 `CHTR` 根目录解析；`--output` 相对当前工作目录解析。
@@ -131,3 +131,14 @@ checkpoint 和配置内的数据路径相对 `CHTR` 根目录解析；`--output`
 遇到 `checkpoint data/split signature mismatch`，检查是否使用原始完整数据、原划分和原 checkpoint；
 不要通过修改或跳过指纹校验来继续运行。
 已在个人电脑核验Conda环境CUDA前向/反向与job605 checkpoint加载；完整模型GPU评估、速度及显存容量仍需运行下述测试确认。
+
+## 当前整字可视化格式
+
+新评估仅展示整图上的GT与预测轨迹覆盖和走向，标起点、终点、方向与笔顺，支持整字播放。
+不再生成逐笔覆盖/方向图、逐笔NPZ或单独SVG；每字只保存 `index.html` 与 `character_trajectory.npz`。
+图片和SVG内嵌于HTML。整字NPZ的 `points` 是预测像素XYW，`stroke_offsets`保存抬笔边界；
+另存GT轨迹/offsets、原图、笔画编号和完整性标记。部分评估不能标为完整字。
+本次不补做历史结果，原test675图库保持不变。
+
+本说明的 `evaluate_single_stroke.py`用于给定真实mask/首点的独立点层诊断。
+笔画层val/test已执行“预测mask/首点 → 点层轨迹”的全流程；配置、两层指标与手动训练命令见 [ORDERED_STROKE](ORDERED_STROKE.md)。
