@@ -225,6 +225,16 @@ class AdapterTests(unittest.TestCase):
             report = json.loads((tmp/'output/summary.json').read_text())
             self.assertEqual(report['stroke_stop_reason'], 'stroke_cap')
             self.assertEqual(report['point_stop_reasons'], ['invalid', 'invalid'])
+            self.assertFalse(report['visualization'])
+            self.assertEqual({p.name for p in (tmp/'output').iterdir()},{'prediction.npz','summary.json'})
+            viz_cmd=cmd.copy()
+            viz_cmd[viz_cmd.index('--output')+1]=str(tmp/'visualized')
+            result=subprocess.run(viz_cmd+['--visualize'],cwd=root,capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stdout+'\n'+result.stderr)
+            self.assertTrue((tmp/'visualized/index.html').is_file())
+            with np.load(tmp/'output/prediction.npz') as raw,np.load(tmp/'visualized/prediction.npz') as visual:
+                np.testing.assert_array_equal(raw['points'],visual['points'])
+                np.testing.assert_array_equal(raw['stroke_offsets'],visual['stroke_offsets'])
 
 
 class EvaluationTests(unittest.TestCase):

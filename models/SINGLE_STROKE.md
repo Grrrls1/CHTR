@@ -2,7 +2,7 @@
 
 当前已实现独立第二阶段，完成CPU smoke、全量资产接入审核及服务器job605的完整训练/验证运行。
 job605已取消，保留epoch20的best.pt；完整val轨迹IoU为0.839904。test675已完成全部68,413笔，条件自由生成IoU为0.839153；历史30字图库保留。
-有序笔画层与串联推理代码已实现，尚待GPU训练及真实效果验收；两层设计与协议见 [README](README.md)。
+有序笔画层与串联推理已实现，job679已完成epoch10完整串联val；两层设计与协议见 [README](README.md)。
 本阶段评估给定真实mask与首点 `(x,y,width)`，不是完整image-only推理。
 
 ## 模型与数据协议
@@ -34,8 +34,7 @@ job605已取消，保留epoch20的best.pt；完整val轨迹IoU为0.839904。test
 
 2026-10-26 已使用 `third_party/StrokeExtraction/.venv/bin/python` 核验服务器 LMDB，
 与现有 v1 清单的候选元数据指纹一致；ID互斥、覆盖、重复组隔离、字符分布及展开笔画数均通过。
-直接复用此清单，未重新抽样或拆分 LMDB。结果见
-[本机核验记录](reports/local_dataset_split_20261026.json)。
+直接复用此清单，未重新抽样或拆分LMDB。
 
 | 集合 | 整字图片数 | 展开笔画数 |
 | --- | ---: | ---: |
@@ -64,121 +63,12 @@ XY与宽度只监督第二点之后的有效点；宽度误差采用归一化单
 全库实测最长393点，没有静默截断。job605已使用batch96完成至少20轮训练；个人电脑容量另行实测。
 smoke配置使用dim32、视觉encoder1层，但仍保留ResNet18和四尺度4层点解码。
 
-## 服务器运行环境
+## 操作入口与验证边界
 
-个人电脑10月23日CPU smoke与当前GPU test使用Conda `test`，见[环境记录](ENVIRONMENT.md)。下列路径及10月26日记录均属于服务器。
+点层训练、恢复、条件val/test，以及两阶段完整训练/测试/推理的全部命令统一见
+[TWO_STAGE_USAGE](TWO_STAGE_USAGE.md)。本文件仅保留点层结构、loss、数据与历史验证依据。
+机器环境见 [ENVIRONMENT](ENVIRONMENT.md)，两阶段指标定义见 [SUMMARY_METRICS](SUMMARY_METRICS.md)。
 
-服务器仓库为 `/home/lkh/workspace/CHTR`，解释器为
-`/home/lkh/workspace/CHTR/third_party/StrokeExtraction/.venv/bin/python`（沿用 StrokeExtraction 环境）。
-2026-10-26 实测：Python 3.10.19、torch 2.12.1+cu130、torchvision 0.27.1+cu130、
-NumPy 1.23.5、Pillow 9.5.0、opencv-python-headless 3.4.18.65、lmdb 3.0.0。
-工具沙箱内CUDA不可见；Slurm分配GPU后已确认RTX5090和CUDA13.0前向/反向可用。
-服务器训练请使用上述独立解释器；不要把PATH中的其他Python视为同一环境。
-该服务器环境已含本阶段所需依赖，无需另外安装整套 requirements 或升级现有 torch / OpenCV。
-`requirements-single-stroke.txt` 是通用安装参考；服务器现存 OpenCV 版本低于其声明的4.5，
-是否可用以服务器测试与数据接入核验为准。
-
-以下命令从仓库根目录执行。计算作业遵循
-[服务器环境与调度约定](ENVIRONMENT.md)。已按用户授权取消job605、提交独立test675；后续按新的明确指令调度。
-Slurm脚本保留CUDA_VISIBLE_DEVICES，并设置 `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1` 读取可信本地训练状态。
-
-## 全量训练与提交
-
-```bash
-cd /home/lkh/workspace/CHTR
-mkdir -p /home/lkh/workspace/logs
-gpu-sbatch --user_name "$(id -un)" models/scripts/train_single_stroke_full.slurm
-```
-
-配置为 `models/configs/single_stroke.json`：batch96、lr3e-4、AdamW、weight_decay=0、
-grad_clip=1、seed42、4线程、augment=false、dropout=0、最多200个epoch，无step上限。
-保持ResNet18、2层视觉encoder、4层四尺度串行点decoder，width_weight=1、valid_weight=0.2。
-每个epoch遍历576,465笔，batch96时为6,005步；每100步和每个epoch边界保存last.pt。
-单卡、4 CPU、32G内存、3天时限。脚本先检查CUDA再直接训练，不进行GPU smoke。
-输出为 `models/runs/single_stroke_full/job_<ID>/train/`，新run要求独立空目录。
-
-job605已按用户要求彻底取消。保留 `runs/single_stroke_full/job_605/train/` 下的best/last及所有现有产物。
-best.pt对应epoch20、step120100；此前job604是旧batch48和step级评估配置，不作为当前运行入口。
-job237历史基线保持保留。上面的命令仅供后续重训，当前待办是完成独立test和结果验收。
-
-## 每10个epoch的完整验证
-
-`evaluation_protocol=full_split_free_v2`：仅在完整的第10、20、30…epoch结束后验证。
-没有step中途验证，也不会因max_steps到达而补做部分epoch验证。
-使用全部8,121张验证图片的83,119笔；`eval_batch_size=32` 独立于训练batch。
-每笔只给真实mask提取的原图和真实首点XY/宽度，后续完全反馈预测点；解码上限400、有效性阈值0.5。
-另外在同一完整验证集报告teacher-forced指标作为辅助诊断，JSON中两者分开命名。
-批量自由解码对已停止样本移出后续计算，保持与单笔解码一致的停止语义。
-
-自由解码报告：轨迹重绘IoU、等序列进度重采样后的XY/宽度MAE与宽度偏差、
-末点欧氏距离、点数MAE、点数完全一致率、正常停止/上限截断数量与比例。
-重绘IoU使用相同的XY/直径渲染规则处理真实与预测轨迹；不是第一阶段mask IoU或论文指标。
-重采样仅用于评估不同长度的序列，不修改训练标签；几何误差不含给定首点，且不是DTW对齐。
-TF辅助报告总loss、XY/宽度/validity损失、像素XY/宽度MAE、宽度偏差、全局有效点/终止位置召回率。
-loss与几何指标先每笔平均再对全库平均；召回率按全库点级计数汇总。
-
-按完整验证集的 `free_trajectory_iou` 最大值选择best.pt。
-early_stopping仍为patience=10、min_delta=0.001、min_epochs=20，但patience现在计10次验证轮次，
-即连续10次（约100个epoch）无超过0.001的IoU改善，且达到最少20个epoch时停止。
-该监控项与job391使用的训练图自由解码IoU的数据集和模型条件不同，不能直接比较分数。
-
-## 固定30字可视化
-
-运行初始化时从val按笔画数跨度确定性选择30个不同字符的样本，冻结实际sample_id到
-`visualization_selection.json` 和 `data_usage.json`，resume时校验不变。
-每次完整验证仍评估全部笔画。新图库每个选中字图只保存整字HTML和整字NPZ，内嵌GT/预测覆盖与走向，不再输出逐笔文件；历史结果不补做。
-
-```text
-train/
-  config.json / data_usage.json / visualization_selection.json
-  metrics.jsonl / last.pt / best.pt / training_status.json
-  eval_total_epoch_010/
-    summary.json      # 完整验证集汇总，含实际epoch、step
-    strokes.jsonl     # 全部验证笔画的自由解码指标
-    index.html        # 固定30字总览：原图/真实轨迹/预测轨迹
-    <sample_id>/
-      index.html                 # 整字覆盖、走向、起终点及笔顺播放；图像内嵌
-      character_trajectory.npz   # 整字预测与GT像素XYW、各自offsets、原图及完整性
-  eval_total_epoch_020/ ...
-  test_best/
-```
-
-## 最终test与独立评估
-
-训练正常达到epoch上限或early stopping后，自动加载val选出的best.pt，
-在全部6,714张测试图片、68,413笔上做一次相同的完整评估，结果写入 `test_best/`。
-测试集不用于调参、阈值、checkpoint选择或早停。作业被取消/超时，或仅因max_steps结束时不自动test。
-若需要独立评估可信本地checkpoint，可手动通过Slurm提交，例如（替换JOB_ID）：
-
-```bash
-gpu-srun --user_name "$(id -un)" --ntasks=1 --gres=gpu:1 --cpus-per-task=4 --mem=16G \
-  env TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 \
-  /home/lkh/workspace/CHTR/third_party/StrokeExtraction/.venv/bin/python models/scripts/evaluate_single_stroke.py \
-  --checkpoint models/runs/single_stroke_full/job_JOB_ID/train/best.pt \
-  --output models/runs/single_stroke_full/job_JOB_ID/eval_val_manual \
-  --split val --device cuda:0 --batch-size 32 --visualize-characters 30
-```
-
-评估默认完整集合；显式 `--limit N` 才是部分诊断，summary标记full_split=false。
-训练仍使用teacher forcing，单笔条件评估并不是完整image-only两阶段推理。
-
-## 验证边界
-
-历史CPU合成夹具验证覆盖：完整划分覆盖、只按epoch调度、固定字图库、批量/单笔
-解码一致、混合停止长度、最终完整test、因果性、padding、loss梯度、早停及中途恢复逐参数一致。
-job605已实际运行batch96训练及83,119笔完整val。独立test675已完成；GPU容量和速度取决于具体机器与batch，不能由服务器结论推定个人电脑可用batch。
-历史全量资产审核见 [2026-10-23记录](reports/single_stroke_smoke_20261023.json)，
-本机元数据指纹核验见 [2026-10-26记录](reports/local_dataset_split_20261026.json)。
-
-## 独立test进度日志
-
-当前服务器脚本为 `scripts/test_single_stroke_job605.slurm`，作业675输出到
-`runs/single_stroke_full/job_605/test_job_675/`。启动打印checkpoint加载、元数据读取/划分校验等阶段；
-每15秒打印阶段心跳，评估时每批打印完成数、百分比、平均速度与ETA。
-心跳只表示日志线程仍在运行，不保证I/O有进展。个人电脑命令见 [TEST_README](TEST_README.md)。
-
-## 笔画层val/test的全流程评估
-
-`evaluate_single_stroke.py`仍保留真实mask/首点条件下的独立点层诊断；
-笔画层训练val和 `evaluate_ordered_stroke.py` 的val/test则全部消费预测mask与预测首点，串联冻结的job605点层。
-完整配置、两层指标、精简图库和手动训练命令见 [ORDERED_STROKE](ORDERED_STROKE.md)。
+历史CPU合成夹具覆盖因果性、padding、停止/截断、保存恢复及导出。
+job605已完成至少20轮batch96训练及完整val，test675完成68,413笔条件评估。
+真实mask/首点条件下的点层结果，不能直接代表预测mask/首点驱动的完整串联效果。

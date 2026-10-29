@@ -24,6 +24,7 @@ def main():
     parser.add_argument('--device', default='cpu')
     parser.add_argument('--threads', type=int, default=4)
     parser.add_argument('--point-batch-size', type=int, default=16)
+    parser.add_argument('--visualize', action='store_true', help='also write a whole-character HTML visualization')
     args = parser.parse_args()
     if args.threads < 1 or args.point_batch_size < 1:
         parser.error('threads and point-batch-size must be positive')
@@ -59,10 +60,12 @@ def main():
                   stroke_stop_reason=result['instances']['stop_reason'],
                   point_stop_reasons=[r['stop_reason'] for r in result['strokes']],
                   point_truncations=sum(r['truncated'] for r in result['strokes']),
+                  visualization=args.visualize,
                   protocol='masked original + predicted start XYW; no GT input',
                   units='points/starts: pixel XY and pixel diameter; boxes: inclusive pixel-center XYXY; masks: probability')
     (output/'summary.json').write_text(json.dumps(report, ensure_ascii=False, indent=2)+'\n')
-    write_prediction_gallery(output, image, trajectories)
+    if args.visualize:
+        write_prediction_gallery(output, image, trajectories)
     print(json.dumps(report, ensure_ascii=False), flush=True)
 
 

@@ -1,6 +1,6 @@
 # CHTR 工作交接
 
-更新：2026-10-28。唯一有效计划见 [models/TODO](models/TODO.md)，当前操作见 [models/README](models/README.md)。
+更新：2026-10-28。唯一有效计划见 [models/TODO](models/TODO.md)，当前操作统一见 [TWO_STAGE_USAGE](models/TWO_STAGE_USAGE.md)。
 环境统一记录在 [ENVIRONMENT](models/ENVIRONMENT.md)，区分个人电脑与服务器，不重复询问已记录硬件。
 
 ## 当前状态

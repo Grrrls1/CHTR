@@ -1,8 +1,9 @@
 # 书法轨迹模型
 
 当前主线是“有序笔画预测 → 单笔轨迹生成”。两层代码和串联推理适配器已实现，分别独立训练。
-点层已完成 job605 全量训练的前20轮验证；笔画层尚未进行GPU训练或真实数据效果验收，串联尚无训练后效果结论。
-计划见 [TODO](TODO.md)，点层协议见 [SINGLE_STROKE](SINGLE_STROKE.md)，笔画层探索、全量训练和两阶段评估见 [ORDERED_STROKE](ORDERED_STROKE.md)。
+点层已完成job605训练及test675；笔画层job679已完成epoch10完整串联val，后续效果以对应run产物为准。
+**训练、测试与完整推理统一使用说明：[TWO_STAGE_USAGE.md](TWO_STAGE_USAGE.md)。**
+计划见 [TODO](TODO.md)，点层设计见 [SINGLE_STROKE](SINGLE_STROKE.md)。
 `summary.json`各项指标的定义、单位、计算口径及示例见 [SUMMARY_METRICS](SUMMARY_METRICS.md)。
 
 ## 当前状态（2026-10-28）
@@ -99,55 +100,13 @@ CLS跨注意力聚合、GroupNorm、FPN与多尺度memory安排、损失平均�
 `networks/two_stage.py` 已实现上述适配，直接调用现有点层 `generate()`，不改变job605结构和权重格式。
 论文正文写明第二阶段使用单笔图，但未明确“mask覆盖原图”的像素构造；本表记录的是当前job605的实际协议。
 
-## 笔画层训练、评估与串联入口
+## 统一操作入口
 
-本机CPU smoke（读取实际LMDB，固定子集；不是效果验收）：
+[TWO_STAGE_USAGE](TWO_STAGE_USAGE.md)集中维护环境/数据准备、两层训练与恢复、
+独立点层诊断、两阶段完整val/test、单图推理、可选可视化和NPZ字段。
+指标逐项解释见 [SUMMARY_METRICS](SUMMARY_METRICS.md)。
 
-```bash
-/home/lkh/anaconda3/envs/test/bin/python models/scripts/train_ordered_stroke.py \
-  --config models/configs/ordered_stroke_smoke.json --device cpu
-```
-
-恢复同一次训练需保持模型、数据划分、batch和loss配置一致；允许调整epoch/step上限：
-
-```bash
-/home/lkh/anaconda3/envs/test/bin/python models/scripts/train_ordered_stroke.py \
-  --config models/configs/ordered_stroke_smoke.json --device cpu \
-  --resume models/runs/ordered_stroke_smoke/last.pt
-```
-
-服务器提交入口为 `gpu-sbatch --user_name lkh models/scripts/train_ordered_stroke.slurm`。
-脚本可接收配置路径作为首个参数，默认全量配置；探索使用 `configs/ordered_stroke_explore.json`。当前val与独立val/test均串联冻结的job605点层，详见 [完整运行说明](ORDERED_STROKE.md)。本次不自动提交训练。
-新run必须使用空目录；产物包括config、data_usage、metrics、last/best和每次验证的summary、逐字JSONL、mask/首点图与预测NPZ。
-checkpoint包含优化器、epoch内游标和随机状态，恢复时核验数据/配置签名。
-
-本机真实资产CPU接入记录见 [ordered_stroke_smoke_20261028.json](reports/ordered_stroke_smoke_20261028.json)：
-完整Swin-T/9层配置在2张训练图上完成4步前后向，并对2张val图做自由推理；均为单笔简单字，解码临时上限3笔。
-这只验证接口、有限梯度与评估通路，不能当成多笔字拟合、收敛、GPU容量或泛化结果。
-
-独立评估默认完整集合，只有显式 `--limit` 才取子集；test仅作独立验收：
-
-```bash
-/home/lkh/anaconda3/envs/test/bin/python models/scripts/evaluate_ordered_stroke.py \
-  --checkpoint models/runs/ordered_stroke_smoke/best.pt \
-  --output models/runs/ordered_stroke_smoke/eval_val_manual --split val --device cpu
-```
-
-自由推理同时报告笔画层与完整串联点层指标。笔画层包括按序mask IoU、严格序列mask@0.5、笔数误差、首点XY/宽度误差及偏差、空mask、正常停止与截断；点层包括整字/按序轨迹IoU、已对齐XY/宽度/端点/点数误差与截断。
-按序IoU逐位置比较，漏笔/多笔补零，除以预测与真实笔数的较大者，再对字平均；严格序列指标要求笔数相同且每个对应mask IoU≥0.5。
-首点误差仅对共同序号报告，漏笔后可能错配，另报参与比较的笔数；正常停止率不是停止正确率。
-笔画mask指标不是COCO Mask AP或最优匹配指标；串联点层轨迹指标另列于 `point_layer`，TF辅助指标独立报告。
-
-笔画层取得已训练checkpoint后，可用纯图片串联入口（输入须已规范化到同一256画布）：
-
-```bash
-/home/lkh/anaconda3/envs/test/bin/python models/scripts/infer_two_stage.py \
-  --stroke-checkpoint PATH_TO_ORDERED_BEST.pt --point-checkpoint PATH_TO_JOB605_BEST.pt \
-  --image PATH_TO_IMAGE_256.png --output models/runs/two_stage_example --device cpu
-```
-
-输出 `prediction.npz` 保存像素XYW、笔画offsets、预测mask、首点与框；`summary.json`记录两层checkpoint及各自停止原因，HTML仅展示整字覆盖和走向。
-该入口不要求标签；当前尚无训练后的笔画层权重，不能据此声称完成整字恢复效果验收。
+历史CPU真实资产接入检查不等同GPU训练后的效果；当前结果以对应run的评估为准。
 
 ## 数据与输出
 
@@ -162,27 +121,11 @@ checkpoint包含优化器、epoch内游标和随机状态，恢复时核验数�
 全部集合共用 `../data/chtr_mmah_lmdb/`；先划分整字，再展开单笔。val 用于选择模型，test 不参与调参或早停。
 数据、checkpoint 和运行产物被 Git 忽略，拉取代码后须单独准备。
 
-## 运行入口
+## 现有产物
 
-服务器与个人电脑环境：[ENVIRONMENT](ENVIRONMENT.md)。个人电脑安装、文件准备、CPU/GPU测试命令：[TEST_README](TEST_README.md)。
-
-服务器独立 test（执行会提交新作业）：
-
-```bash
-cd /home/lkh/workspace/CHTR
-gpu-sbatch --user_name lkh models/scripts/test_single_stroke_job605.slurm
-```
-
-当前测试结果：`runs/single_stroke_full/job_605/test_job_675/`，包括 `summary.json`、逐笔 `strokes.jsonl`、30个字符的 `index.html` 和轨迹NPZ。
-新评估仅输出整字GT/预测覆盖与走向，保留起终点、方向箭头和笔顺播放；每字仅一个HTML和一个整字NPZ，不再生成逐笔文件。旧图库保持原样，本次不补做历史可视化。
-实时日志：
-
-```bash
-tail -f /home/lkh/workspace/logs/chtr-stroke-test605-675.out
-```
-
-独立评估入口输出初始化阶段、每15秒状态提示，以及每批完成数、比例、平均速度和预计剩余时间。心跳不代表磁盘读取一定在推进。
-后续若重训，使用 `scripts/train_single_stroke.py` 与 `configs/single_stroke.json`，服务器入口为 `scripts/train_single_stroke_full.slurm`；当前没有继续训练的待办。
+job605点层权重位于 `runs/single_stroke_full/job_605/train/`，test675结果位于同run的 `test_job_675/`。
+job679笔画层及串联评估位于 `runs/ordered_stroke_full/job_679/train/`；
+完整val输出两层指标，图库仅整字HTML与NPZ，无逐笔文件。训练与查看命令统一见上述使用说明。
 
 ## 代码组织
 
@@ -203,16 +146,8 @@ scripts/infer_two_stage.py            纯图片两阶段串联推理
 tests/                               当前模型、固定划分及基线回归测试
 ```
 
-回归检查（CPU合成数据，不读取完整训练库）：
-
-```bash
-/home/lkh/anaconda3/envs/test/bin/python -m unittest discover -s models/tests -v
-```
-
-本次本机CPU检查共54项通过（53项完整回归，加1项随后新增的双模型串联CLI检查），覆盖笔画层因果性、
-padding、独立首点宽度梯度、停止/截断、合成固定小集loss下降、逐参数一致恢复、评估计数与点层协议。
-旧基线attention已补torch1.13兼容计算；IoU筛选测试改为自建类别表夹具，不再读取已忽略的旧实验目录。
-这些检查不替代GPU容量或真实数据效果验收。
+回归检查命令见 [统一使用说明](TWO_STAGE_USAGE.md#checks)。
+CPU合成数据检查与实际GPU容量、真实效果验收分别记录。
 
 ## 历史基线和清理范围
 
