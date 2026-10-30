@@ -1,3 +1,5 @@
 __pycache__/
 runs/
 .venv/
+# Local copies of trained stage-one and stage-two weights
+/checkpoints/
