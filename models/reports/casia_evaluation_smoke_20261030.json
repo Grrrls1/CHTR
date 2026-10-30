@@ -1,0 +1,82 @@
+{
+  "date": "2026-10-30T16:26:04.802473+08:00",
+  "purpose": "CASIA evaluator integration verification only; not full benchmark results",
+  "official_archive_url": "https://nlpr.ia.ac.cn/databases/Download/Online/CharData/Pot1.1Test.zip",
+  "official_first_member": {
+    "name": "1241.pot",
+    "crc32": 2641005015,
+    "crc_verified": true,
+    "sha256": "555d10acbaa5f643a2aed2f15aee0053621f3777ede5cb985fc0127787a9d2a0",
+    "parsed_records": 3925,
+    "decoded_chinese_records": 3755
+  },
+  "actual_inference": {
+    "images": 2,
+    "device": "cpu",
+    "warmup_runs": 1,
+    "summary": {
+      "status": "complete",
+      "metrics": {
+        "images": 2,
+        "miou": 0.4971772578770054,
+        "binary_class_miou": 0.69409948610634,
+        "miou_predicted_width": 0.4947972806789386,
+        "dtw_sum_px_mean": 11913.23510062219,
+        "dtw_path_mean_px_mean": 16.303308892430955,
+        "dtw_valid_images": 2,
+        "dtw_undefined_images": 0,
+        "empty_predictions": 0,
+        "mean_predicted_strokes": 6.5,
+        "mean_gt_strokes": 6.5,
+        "stroke_count_mae": 0.0,
+        "stroke_cap_image_rate": 0.0,
+        "point_cap_image_rate": 0.0,
+        "timing_seconds": {
+          "mean": 11.618442040498849,
+          "median": 11.618442040498849,
+          "p95": 12.357980545948703,
+          "total": 23.236884080997697
+        }
+      },
+      "fid": {
+        "value": 328.33198915396684,
+        "samples": 2,
+        "dimensions": 2048,
+        "extractor": "pytorch-fid InceptionV3 FID weights",
+        "package_version": "0.3.0",
+        "weights_sha256": "6726825d0af5f729cebd5821db510b11b1cfad8faad88a03f1befd49fb9129b2",
+        "status": "complete",
+        "small_sample_warning": true,
+        "rendering": "same fixed width for GT and predicted XY; grayscale repeated to RGB; package resize/normalize",
+        "seconds": 57.504908770999464
+      },
+      "sessions": [
+        {
+          "warmup_runs": 1,
+          "warmup_seconds": 12.272486796000521,
+          "model_load_seconds": 0.8677140059990052,
+          "images": 2
+        }
+      ],
+      "dtw_backend": "numba exact CPU",
+      "protocol": {
+        "miou": "macro mean of whole-character foreground IoU, BOTH rendered at fixed width",
+        "binary_class_miou": "macro mean over foreground/background IoU",
+        "dtw": "sum of Euclidean XY costs along exact min-cost path; original point order, no resampling, no pen-up coordinate insertion",
+        "dtw_path_mean": "same optimal path cost divided by path length; not PEN-Net LDTW",
+        "fid": "dataset-level 2048-D pytorch-fid features, same fixed-width rendering as mIoU",
+        "scope": "local 256x256 external evaluation; not a claim of matching any published split/render/sampling protocol",
+        "width": "POT has XY and pen-up boundaries, no measured width/pressure/time; diameter is synthetic"
+      },
+      "per_image_records": "per_image.jsonl",
+      "per_image_table": "per_image.csv",
+      "inference_timing": "CUDA synchronized, excludes model load, warmup, rasterization, transfer, metrics, saving, visualization and FID"
+    }
+  },
+  "limitations": [
+    "Only first two Chinese samples; no full CASIA benchmark executed",
+    "Two-image FID verifies code path only; not a model-quality estimate",
+    "Validation artifacts and dependencies reside in /tmp; may be cleared"
+  ],
+  "documentation": "models/CASIA_EVALUATION.md"
+}

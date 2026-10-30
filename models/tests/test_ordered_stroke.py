@@ -235,6 +235,11 @@ class AdapterTests(unittest.TestCase):
             with np.load(tmp/'output/prediction.npz') as raw,np.load(tmp/'visualized/prediction.npz') as visual:
                 np.testing.assert_array_equal(raw['points'],visual['points'])
                 np.testing.assert_array_equal(raw['stroke_offsets'],visual['stroke_offsets'])
+            timing = report['timing_seconds']
+            self.assertGreater(timing['inference'], 0)
+            self.assertGreater(timing['model_load'], 0)
+            self.assertGreaterEqual(timing['total_before_summary_write'], timing['inference'] + timing['model_load'])
+            self.assertEqual(report['device'], 'cpu')
 
 
 class EvaluationTests(unittest.TestCase):

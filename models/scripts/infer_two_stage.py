@@ -3,6 +3,7 @@ import argparse
 import json
 from pathlib import Path
 import sys
+from time import perf_counter
 
 import cv2
 import numpy as np
@@ -16,6 +17,7 @@ from models.visualization.trajectory_gallery import write_prediction_gallery
 
 
 def main():
+    total_started = perf_counter()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--stroke-checkpoint', required=True)
     parser.add_argument('--point-checkpoint', required=True)
@@ -35,17 +37,28 @@ def main():
     output = local_path(args.output)
     if output.exists() and any(output.iterdir()):
         parser.error('output must be an empty directory')
+    device = torch.device(args.device)
+    load_started = perf_counter()
     stroke, stroke_ck = load_stroke_model(args.stroke_checkpoint, args.device)
     point, point_ck = load_point_model(local_path(args.point_checkpoint), args.device)
     stroke.eval()
     point.eval()
+    if device.type == 'cuda':
+        torch.cuda.synchronize(device)
+    model_load_seconds = perf_counter() - load_started
     images = torch.from_numpy(image.astype(np.float32)[None, None]/255.).to(args.device)
+    if device.type == 'cuda':
+        torch.cuda.synchronize(device)
+    inference_started = perf_counter()
     result = recover_trajectories(stroke, point, images,
         max_strokes=stroke_ck['config'].get('decode_max_strokes',stroke.max_strokes),
         max_points=point_ck['config'].get('decode_max_points',point.max_points),
         stroke_threshold=stroke_ck['config']['validity_threshold'],
         point_threshold=point_ck['config'].get('validity_threshold', .5),
         point_batch_size=args.point_batch_size)[0]
+    if device.type == 'cuda':
+        torch.cuda.synchronize(device)
+    inference_seconds = perf_counter() - inference_started
     trajectories = [r['points'].cpu().numpy()*np.array([255, 255, 256], np.float32) for r in result['strokes']]
     offsets = np.r_[0, np.cumsum([len(p) for p in trajectories])].astype(np.int64)
     points = np.concatenate(trajectories) if trajectories else np.empty((0, 3), np.float32)
@@ -62,7 +75,13 @@ def main():
                   point_truncations=sum(r['truncated'] for r in result['strokes']),
                   visualization=args.visualize,
                   protocol='masked original + predicted start XYW; no GT input',
-                  units='points/starts: pixel XY and pixel diameter; boxes: inclusive pixel-center XYXY; masks: probability')
+                  units='points/starts: pixel XY and pixel diameter; boxes: inclusive pixel-center XYXY; masks: probability',
+                  device=str(device),
+                  timing_seconds=dict(model_load=model_load_seconds, inference=inference_seconds,
+                                      total_before_summary_write=perf_counter()-total_started),
+                  timing_protocol='perf_counter wall time; CUDA synchronized; single image, no warmup; '
+                                  'inference includes both stages, excluding model load and input transfer; '
+                                  'total starts at main(), includes NPZ saving, excludes imports and summary writing')
     (output/'summary.json').write_text(json.dumps(report, ensure_ascii=False, indent=2)+'\n')
     if args.visualize:
         write_prediction_gallery(output, image, trajectories)

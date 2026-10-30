@@ -108,6 +108,14 @@ CLS跨注意力聚合、GroupNorm、FPN与多尺度memory安排、损失平均�
 
 历史CPU真实资产接入检查不等同GPU训练后的效果；当前结果以对应run的评估为准。
 
+## CASIA-OLHWDB外部评估
+
+新增 `scripts/download_casia_olhwdb.py` 下载官方POT测试轨迹，
+`scripts/evaluate_casia_olhwdb.py` 将轨迹渲染为256×256图片，仅以图片输入两阶段模型，
+计算逐字前景IoU、精确DTW和全量2048维FID，支持预热排除、断点续跑及样例可视化。
+下载命令、依赖与指标定义见 [CASIA_EVALUATION](CASIA_EVALUATION.md)。
+这是当前权重的外部数据集评估，未对齐论文的划分/采样/渲染时不直接横比论文分数。
+
 ## 数据与输出
 
 固定划分：[full_character_v1.json](data_splits/full_character_v1.json)，说明见 [data_splits/README](data_splits/README.md)。
