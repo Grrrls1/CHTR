@@ -108,6 +108,15 @@ CLS跨注意力聚合、GroupNorm、FPN与多尺度memory安排、损失平均�
 
 历史CPU真实资产接入检查不等同GPU训练后的效果；当前结果以对应run的评估为准。
 
+## 普通图片与相机照片推理
+
+`scripts/infer_image.py` 提供“单字ROI/灰度化 → 等比例缩放与填白 → 现有两阶段推理 → HTML可视化”的单张入口，
+并保存到原图像素坐标的逆变换；命令与腕部相机接入边界见 [IMAGE_INFERENCE](IMAGE_INFERENCE.md)。
+
+单字目录数据可用 `scripts/build_trajectory_dictionary.py` 全量转换为“汉字→多写法→轨迹”的可携带字典，
+demo使用无需模型的 `TrajectoryDictionary` 或 `scripts/lookup_trajectory.py` 查询。
+柳公权楷书数据来源、命令和坐标约定见 [TRAJECTORY_DICTIONARY](TRAJECTORY_DICTIONARY.md)。
+
 ## CASIA-OLHWDB外部评估
 
 新增 `scripts/download_casia_olhwdb.py` 下载官方POT测试轨迹，
