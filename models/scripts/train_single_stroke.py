@@ -13,7 +13,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 from models.datasets.single_stroke import collate_single_strokes, SingleStrokeDataset
 from models.losses.single_stroke import single_stroke_loss
 from models.networks.single_stroke import SingleStrokeModel,MODE
-from models.training.single_stroke import local_path,to_device,make_data,signature
+from models.training.single_stroke import local_path,to_device,make_data,signature,validate_continuation
 from models.training.single_stroke_evaluation import evaluate_split, visualization_ids
 from models.training.early_stopping import EarlyStopping
 
@@ -22,8 +22,13 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--config',default='models/configs/single_stroke.json')
     p.add_argument('--output-dir');p.add_argument('--device');p.add_argument('--resume')
+    p.add_argument('--continue-from',help='trusted parent checkpoint; new run, optionally changed train/eval batch')
+    p.add_argument('--require-evaluated-epoch',type=int,help='continuation parent must have committed at least this validation epoch')
     p.add_argument('--max-steps',type=int);p.add_argument('--epochs',type=int)
     args=p.parse_args();config=json.loads(local_path(args.config).read_text())
+    if args.resume and args.continue_from:p.error('--resume and --continue-from are mutually exclusive')
+    if args.require_evaluated_epoch is not None and (not args.continue_from or args.require_evaluated_epoch<1):
+        p.error('--require-evaluated-epoch requires --continue-from and a positive epoch')
     for k in ('output_dir','device','max_steps','epochs'):
         if getattr(args,k) is not None:config[k]=getattr(args,k)
     if config['training_mode']!=MODE:raise ValueError('incorrect mode')
@@ -63,17 +68,48 @@ def main():
         optimizer=optimizer_class(model.parameters(),lr=config['learning_rate'],weight_decay=config['weight_decay'])
         scheduler=(torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,T_max=cosine_steps) if cosine_steps
                    else torch.optim.lr_scheduler.LambdaLR(optimizer,lr_lambda=lambda _:1.))
-        step=epoch=cursor=last_evaluated_epoch=0;best=None;last_val_loss=None
-        if args.resume:
-            ck=torch.load(local_path(args.resume),map_location=device,weights_only=False)
-            if ck.get('training_mode')!=MODE or ck['signature']!=sig:raise ValueError('resume architecture/data/split/settings differ; use a new run for changed batch/evaluation protocol')
+        step=epoch=cursor=last_evaluated_epoch=0;best=None;last_val_loss=None;lineage=None
+        if args.resume or args.continue_from:
+            source=local_path(args.resume or args.continue_from).resolve()
+            if args.continue_from:
+                output.mkdir(parents=True,exist_ok=True)
+                snapshot=output/'parent_last.pt'
+                shutil.copyfile(source,snapshot)
+            else:
+                snapshot=source
+            ck=torch.load(snapshot,map_location='cpu',weights_only=False)
+            if args.continue_from:
+                changed=validate_continuation(ck,config,catalog,args.require_evaluated_epoch)
+                from models.datasets.casia_training import sha256_file
+                lineage=dict(parent_checkpoint=str(source),parent_sha256=sha256_file(snapshot),
+                             parent_step=ck['step'],parent_epoch=ck['epoch'],parent_cursor=ck['cursor'],
+                             parent_last_evaluated_epoch=ck['last_evaluated_epoch'],changed_settings=changed,
+                             inherited_lineage=ck.get('lineage'))
+            elif ck.get('training_mode')!=MODE or ck['signature']!=sig:
+                raise ValueError('resume architecture/data/split/settings differ; use --continue-from for a recorded batch change')
+            else:
+                lineage=ck.get('lineage')
             model.load_state_dict(ck['model']);optimizer.load_state_dict(ck['optimizer']);scheduler.load_state_dict(ck['scheduler'])
             step,epoch,cursor=ck['step'],ck['epoch'],ck['cursor']
             best=ck.get('best_selection_score',ck.get('best_val_free_iou'));last_val_loss=ck['best_val_loss'];last_evaluated_epoch=ck['last_evaluated_epoch']
             if ck['visualization_ids']!=fixed_ids:raise ValueError('fixed visualization IDs changed')
             stopper.load_state_dict(ck['early_stopping'])
             torch.set_rng_state(ck['rng']['torch'].cpu());random.setstate(ck['rng']['python']);np.random.set_state(ck['rng']['numpy'])
-            if ck['rng']['cuda'] is not None and torch.cuda.is_available():torch.cuda.set_rng_state_all(ck['rng']['cuda'])
+            if ck['rng']['cuda'] is not None and device.type=='cuda':torch.cuda.set_rng_state_all([s.cpu() for s in ck['rng']['cuda']])
+            if args.continue_from:
+                if not 0<=cursor<len(indices):raise ValueError('parent cursor outside the training subset')
+                if best is not None:
+                    parent_best=source.with_name('best.pt')
+                    shutil.copyfile(parent_best,output/'best.pt')
+                    best_ck=torch.load(output/'best.pt',map_location='cpu',weights_only=False)
+                    validate_continuation(best_ck,config,catalog)
+                    if (best_ck.get('best_selection_score',best_ck.get('best_val_free_iou'))!=best
+                            or best_ck['step']>step):
+                        raise ValueError('parent best.pt inconsistent with parent last.pt; stop parent job before continuation')
+                    lineage['inherited_best_sha256']=sha256_file(output/'best.pt')
+                    del best_ck
+                (output/'continuation.json').write_text(json.dumps(lineage,indent=2)+'\n')
+            del ck
         output.mkdir(parents=True,exist_ok=True)
         (output/'config.json').write_text(json.dumps(config,indent=2)+'\n')
         usage=dict(training_mode=MODE,dataset_fingerprint=catalog.fingerprint,signature=sig,
@@ -81,12 +117,12 @@ def main():
                    train_keys=[train.key(i) for i in indices],val_keys=[val.key(i) for i in val_indices],
                    evaluation_split='val',validation_strokes=len(val_indices),visualization_ids=fixed_ids,
                    test_used_for_model_selection=False,evaluation_protocol=config['evaluation_protocol'],
-                   training='all true historical XY/width; first XYZ given; subsequent points predicted')
+                   training='all true historical XY/width; first XYZ given; subsequent points predicted',lineage=lineage)
         (output/'data_usage.json').write_text(json.dumps(usage,ensure_ascii=False,indent=2)+'\n')
         (output/'visualization_selection.json').write_text(json.dumps(dict(split='val',sample_ids=fixed_ids),ensure_ascii=False,indent=2)+'\n')
         def save():
             ck=dict(training_mode=MODE,config=config,signature=sig,model=model.state_dict(),
-                    optimizer=optimizer.state_dict(),scheduler=scheduler.state_dict(),step=step,epoch=epoch,cursor=cursor,
+                    optimizer=optimizer.state_dict(),scheduler=scheduler.state_dict(),step=step,epoch=epoch,cursor=cursor,lineage=lineage,
                     best_selection_score=best, selection_metric=selection_metric,
                     best_val_free_iou=best if selection_metric=='free_trajectory_iou' else None,best_val_loss=last_val_loss,last_evaluated_epoch=last_evaluated_epoch,
                     visualization_ids=fixed_ids,rng=dict(torch=torch.get_rng_state(),python=random.getstate(),numpy=np.random.get_state(),

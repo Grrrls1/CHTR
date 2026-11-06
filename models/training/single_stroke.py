@@ -78,6 +78,23 @@ def signature(config,catalog):
     return hashlib.sha256(json.dumps(payload,sort_keys=True).encode()).hexdigest()
 
 
+def validate_continuation(checkpoint, config, catalog, required_epoch=None):
+    """Allow a recorded batch change, while retaining all scientific settings."""
+    old = checkpoint['config']
+    if checkpoint.get('training_mode') != MODE or checkpoint.get('signature') != signature(old,catalog):
+        raise ValueError('parent checkpoint architecture/data/split signature mismatch')
+    allowed = {'batch_size','eval_batch_size','output_dir','device','threads','epochs','max_steps'}
+    changed = {key for key in old.keys() | config.keys() if old.get(key) != config.get(key)}
+    if changed - allowed:
+        raise ValueError('continuation changed protected settings: '+', '.join(sorted(changed-allowed)))
+    if required_epoch is not None and checkpoint['last_evaluated_epoch'] < required_epoch:
+        raise ValueError(f'parent checkpoint has not committed validation epoch {required_epoch}')
+    if (checkpoint['cursor']==0 and checkpoint['epoch']%old['eval_every_epochs']==0
+            and checkpoint['last_evaluated_epoch']<checkpoint['epoch']):
+        raise ValueError('parent checkpoint has an uncommitted epoch validation; wait for validation and checkpoint save')
+    return {key:dict(old=old.get(key),new=config.get(key)) for key in sorted(changed)}
+
+
 def load_model(checkpoint,device):
     # Checkpoints are trusted local files, never remote/untrusted pickle payloads.
     ck=torch.load(checkpoint,map_location=device,weights_only=False)

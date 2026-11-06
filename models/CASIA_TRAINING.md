@@ -76,7 +76,7 @@ gpu-sbatch --user_name lkh models/scripts/train_casia.slurm ordered_stroke /path
 训练入口的val与可选final test共用 `eval_batch_size=128`；独立 `evaluate_single_stroke.py` 对CASIA checkpoint默认128，
 可用 `--batch-size` 显式覆盖。笔画层的整字batch设置独立保留。
 本次未做容量测试，未重启作业；job1136已有run配置和checkpoint仍记录原batch16。
-已有checkpoint的训练恢复签名包含batch，改为256后不能直接使用原 `--resume`，需先适配变更batch的续训入口。
+已有checkpoint的训练恢复签名包含batch，改为256后不能直接使用原 `--resume`；变更batch使用下面的 `--continue-from` 新run入口。
 
 两个阶段都以**val AIoU**选best。点层是带真实mask和起点的逐笔诊断，按笔等权平均；
 笔画层串联冻结的CASIA点层，以纯图片输入的逐字AIoU等权平均选best。
@@ -129,3 +129,30 @@ GPU作业1135已按lkh提交但仍在排队，不能据此宣称GPU验证通过�
 
 详细结果见 [准备报告](reports/casia_training_preparation_20261103.json)，
 [渲染预览](reports/casia_training_preview_20261103.png)每行同一字，三列分别为2/8/12px。
+
+## 从job1136继续训练：train256、val/test128
+
+先等待epoch4完整验证结束且checkpoint保存完成，再停止旧作业，避免两份训练同时运行。
+仅有eval004的summary还不能保证last.pt已提交验证状态；新入口会核验 `last_evaluated_epoch>=4`，
+若不满足会报错，不会跳过这轮未提交的验证。最好在日志已经出现验证后的下一条train记录时再停止。
+
+```bash
+cd /home/lkh/workspace/CHTR
+# 确认第4轮验证和checkpoint保存完成后，由用户执行：
+scancel 1136
+# 确认squeue中旧作业已退出，再提交：
+gpu-sbatch --user_name lkh models/scripts/train_casia.slurm single_stroke \
+  models/configs/casia_single_stroke.json \
+  --continue-from models/runs/casia_olhwdb11/single_stroke/job_1136/train/last.pt \
+  --require-evaluated-epoch 4
+```
+
+产物写入新作业的 `models/runs/casia_olhwdb11/single_stroke/job_<新ID>/train/`，
+保留旧job1136目录。新目录保存 `parent_last.pt` 快照、`continuation.json`（来源SHA256与参数变化）、
+继承的best，以及新的last/best、配置、metrics和后续评估。继承的best若尚未被新阶段超过，仍保留父checkpoint的原始配置。
+
+该入口恢复模型、AdamW动量、scheduler、RNG、累计step、epoch、已消费样本cursor、早停和历史best。
+只允许训练/评估batch及输出、设备、线程、总epoch、step限制改变，其余训练/数据/渲染/模型设置必须相同。
+原 `--resume` 继续保留同目录且签名完全一致的严格恢复语义。若停机时第5轮已开始，会从最近保存的第5轮cursor继续，而不是重跑第4轮。
+200 epochs仍表示历史累计总轮数，不是额外再训练200轮。训练batch256、val/test128、学习率3e-4。
+本入口按用户要求未运行测试；batch256的GPU容量也尚未验证。本次没有取消或提交任何作业。
