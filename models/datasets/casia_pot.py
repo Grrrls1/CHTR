@@ -16,11 +16,12 @@ def decode_label(tag):
     return tag.to_bytes(2, 'big').decode('gbk')
 
 
-def iter_pot(path):
+def iter_pot(path, start_offset=0, start_index=0):
     """Yield validated samples with raw point order and original stroke breaks."""
     path = Path(path)
     with path.open('rb') as stream:
-        index = 0
+        stream.seek(start_offset)
+        index = start_index
         while True:
             offset = stream.tell()
             header = stream.read(8)
@@ -35,23 +36,18 @@ def iter_pot(path):
             if len(body) != size-8:
                 raise ValueError(f'{path}:{offset}: truncated POT body')
             pairs = np.frombuffer(body, dtype='<i2').reshape(-1, 2)
-            strokes, current, ended = [], [], False
-            for i, (x, y) in enumerate(pairs):
-                if x == -1 and y == 0:
-                    if not current:
-                        raise ValueError(f'{path}:{offset}: empty stroke')
-                    strokes.append(np.asarray(current, np.float32))
-                    current = []
-                elif x == -1 and y == -1:
-                    if current or i != len(pairs)-1:
-                        raise ValueError(f'{path}:{offset}: malformed character end')
-                    ended = True
-                elif x < 0 or y < 0 or ended:
-                    raise ValueError(f'{path}:{offset}: invalid coordinate/end marker')
-                else:
-                    current.append((int(x), int(y)))
-            if not ended or len(strokes) != count:
-                raise ValueError(f'{path}:{offset}: stroke count or end marker mismatch')
+            if not np.array_equal(pairs[-1], [-1, -1]):
+                raise ValueError(f'{path}:{offset}: malformed character end')
+            data = pairs[:-1]
+            separators = np.flatnonzero((data[:, 0] == -1) & (data[:, 1] == 0))
+            starts = np.r_[0, separators[:-1]+1]
+            if (len(separators) != count or not len(data) or separators[-1] != len(data)-1
+                    or (separators <= starts).any()):
+                raise ValueError(f'{path}:{offset}: stroke count or empty stroke mismatch')
+            negative = (data < 0).any(1)
+            if negative.sum() != count or not negative[separators].all():
+                raise ValueError(f'{path}:{offset}: invalid coordinate/end marker')
+            strokes = [data[a:b].astype(np.float32) for a,b in zip(starts, separators)]
             try:
                 char, label_error = decode_label(tag), None
             except (UnicodeError, ValueError) as error:

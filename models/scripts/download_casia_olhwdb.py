@@ -1,4 +1,4 @@
-"""Download only an official OLHWDB POT test archive; retain archive and resume partial downloads."""
+"""Download an official OLHWDB POT archive; retain and verify resumable downloads."""
 import argparse
 import hashlib
 import json
@@ -16,24 +16,32 @@ BASE = 'https://nlpr.ia.ac.cn/databases/Download/Online/CharData/'
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--version', choices=['1.0', '1.1', '1.2'], default='1.1')
+    parser.add_argument('--split', choices=['train', 'test'], default='test')
     parser.add_argument('--output', type=Path, default=Path('data/CASIA-OLHWDB'))
     parser.add_argument('--extract-only', action='store_true')
+    parser.add_argument('--download-tool', choices=['wget', 'aria2c'], default='wget')
     args = parser.parse_args()
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=True)
-    archive = root/f'Pot{args.version}Test.zip'
+    archive = root/f'Pot{args.version}{args.split.title()}.zip'
     url = BASE+archive.name
     if not archive.exists():
         if args.extract_only:
             parser.error('Archive missing: '+str(archive))
         partial = archive.with_suffix('.zip.part')
-        subprocess.run(['wget', '--continue', '--tries=8', '--timeout=30', '--output-document', str(partial), url], check=True)
+        if args.download_tool == 'aria2c':
+            command = ['aria2c', '--continue=true', '--max-connection-per-server=16', '--split=16',
+                       '--min-split-size=1M', '--max-tries=8', '--timeout=30', '--summary-interval=30',
+                       '--dir='+str(root), '--out='+partial.name, url]
+        else:
+            command = ['wget', '--continue', '--tries=8', '--timeout=30', '--output-document', str(partial), url]
+        subprocess.run(command, check=True)
         with zipfile.ZipFile(partial) as z:
             bad = z.testzip()
             if bad:
                 raise ValueError('ZIP CRC mismatch: '+bad)
         partial.replace(archive)
-    target = root/args.version/'test'
+    target = root/args.version/args.split
     target.mkdir(parents=True, exist_ok=True)
     written = skipped = 0
     with zipfile.ZipFile(archive) as z:
@@ -68,8 +76,8 @@ def main():
     report = dict(url=url, archive=str(archive), bytes=archive.stat().st_size,
                   sha256=hashlib.sha256(archive.read_bytes()).hexdigest(),
                   extraction=str(target), extracted=written, existing_verified=skipped,
-                  pot_files=len(list(target.rglob('*.pot'))), split='official test')
-    (root/f'download_{args.version}_test.json').write_text(json.dumps(report, indent=2)+'\n')
+                  pot_files=len(list(target.rglob('*.pot'))), split='official '+args.split)
+    (root/f'download_{args.version}_{args.split}.json').write_text(json.dumps(report, indent=2)+'\n')
     print(json.dumps(report, indent=2))
 
 

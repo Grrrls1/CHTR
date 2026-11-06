@@ -1,0 +1,174 @@
+{
+  "date": "2026-11-03",
+  "data_preparation": "complete",
+  "schema": "casia_olhwdb11_xyw_v1",
+  "dataset_fingerprint": "3b4a8687c3a250559d03f690ce91f91cb7727be91f7dadc0748f99695bdd7701",
+  "writer_counts": {
+    "train": 216,
+    "val": 24,
+    "test": 60
+  },
+  "statistics": {
+    "train": {
+      "raw_records": 845597,
+      "excluded_non_chinese": 36901,
+      "characters": 808696,
+      "strokes": 4480881,
+      "points": 49172524,
+      "max_strokes": 26,
+      "max_stroke_points": 192,
+      "max_character_points": 280,
+      "single_point_strokes": 2135,
+      "consecutive_duplicate_points": 356667,
+      "strokes_over_2048_points": 0,
+      "characters_over_64_strokes": 0
+    },
+    "val": {
+      "raw_records": 93967,
+      "excluded_non_chinese": 4090,
+      "characters": 89877,
+      "strokes": 519116,
+      "points": 5541330,
+      "max_strokes": 25,
+      "max_stroke_points": 116,
+      "max_character_points": 283,
+      "single_point_strokes": 180,
+      "consecutive_duplicate_points": 48807,
+      "strokes_over_2048_points": 0,
+      "characters_over_64_strokes": 0
+    },
+    "test": {
+      "raw_records": 234800,
+      "excluded_non_chinese": 10241,
+      "characters": 224559,
+      "strokes": 1251111,
+      "points": 13751363,
+      "max_strokes": 29,
+      "max_stroke_points": 160,
+      "max_character_points": 265,
+      "single_point_strokes": 651,
+      "consecutive_duplicate_points": 102475,
+      "strokes_over_2048_points": 0,
+      "characters_over_64_strokes": 0
+    }
+  },
+  "sources": {
+    "train": {
+      "url": "https://nlpr.ia.ac.cn/databases/Download/Online/CharData/Pot1.1Train.zip",
+      "archive": "/home/lkh/workspace/CHTR/data/CASIA-OLHWDB/Pot1.1Train.zip",
+      "bytes": 193544917,
+      "sha256": "5edd96404f2e954a1384ecdd1ae98f6b5753ce5918fecbf9f821fe538c1291ec",
+      "extraction": "/home/lkh/workspace/CHTR/data/CASIA-OLHWDB/1.1/train",
+      "extracted": 240,
+      "existing_verified": 0,
+      "pot_files": 240,
+      "split": "official train"
+    },
+    "test": {
+      "url": "https://nlpr.ia.ac.cn/databases/Download/Online/CharData/Pot1.1Test.zip",
+      "archive": "/home/lkh/workspace/CHTR/data/CASIA-OLHWDB/Pot1.1Test.zip",
+      "bytes": 48698629,
+      "sha256": "3cb08e36dc862b7f811fe16c4bb9bcf2e211b826484071ae14e6eb67ecf59103",
+      "extraction": "/home/lkh/workspace/CHTR/data/CASIA-OLHWDB/1.1/test",
+      "extracted": 60,
+      "existing_verified": 0,
+      "pot_files": 60,
+      "split": "official test"
+    }
+  },
+  "render": {
+    "size": 256,
+    "margin": 8,
+    "supersample": 4,
+    "train_width_min": 2,
+    "train_width_max": 12,
+    "eval_width": 8,
+    "seed": 42,
+    "width_distribution": "discrete_uniform_per_character_per_epoch",
+    "mask_threshold": 0.5,
+    "width_units": "diameter_in_256_canvas_pixels"
+  },
+  "model_caps": {
+    "max_points": 256,
+    "max_strokes": 32,
+    "basis": "train/val audit only; test coverage verified without choosing parameters"
+  },
+  "artifacts": {
+    "dataset": "data/CASIA-OLHWDB/training_v1",
+    "instructions": "models/CASIA_TRAINING.md",
+    "preview": "models/reports/casia_training_preview_20261103.png",
+    "cpu_smoke": "models/runs/casia_olhwdb11/cpu_smoke_20261103_v2/smoke_report.json"
+  },
+  "checks": {
+    "full_cpu_regression": {
+      "tests": 79,
+      "status": "passed",
+      "log": "/home/lkh/workspace/logs/casia_cpu_regression_20261103.log"
+    },
+    "targeted_recheck": {
+      "tests": 4,
+      "status": "passed",
+      "log": "/home/lkh/workspace/logs/casia_adaptation_tests_20261103.log"
+    },
+    "real_pot_cpu_smoke": {
+      "status": "passed",
+      "job_id": null,
+      "user": "lkh",
+      "device": "cpu",
+      "seconds": 243.55726652010344,
+      "point": {
+        "step": 3,
+        "epoch": 1,
+        "cursor": 2,
+        "device": "cpu",
+        "seconds": 7.643962828908116,
+        "best_selection_score": 0.06065353912080792,
+        "selection_metric": "casia_metrics.aiou",
+        "best_val_free_iou": null,
+        "last_val_teacher_forced_loss": 0.3044307163128486,
+        "last_evaluated_epoch": 1,
+        "parameters": 11969284,
+        "reason": "max_steps",
+        "early_stopping_monitor": "1-casia_metrics.aiou",
+        "early_stopping": {
+          "best": 0.939346460879192,
+          "bad_epochs": 0,
+          "last_epoch": 1,
+          "loss_sum": 0.0,
+          "samples": 0
+        }
+      },
+      "stroke": {
+        "step": 3,
+        "epoch": 1,
+        "cursor": 1,
+        "best_selection_score": 0.26898659922668766,
+        "selection_metric": "casia_metrics.aiou",
+        "best_val_ordered_iou": null,
+        "last_evaluated_epoch": 1,
+        "device": "cpu",
+        "parameters": 39852610,
+        "reason": "max_steps"
+      },
+      "scope": "real train/val POT; 3 optimizer steps each incl resume; full Swin-T/9 layers; bounded decoding; no test and no quality/capacity acceptance"
+    },
+    "slurm_gpu_smoke": {
+      "job_id": 1135,
+      "user": "lkh",
+      "status": "PENDING",
+      "reason": "Priority",
+      "estimated_start": "2026-11-04 10:05 Asia/Shanghai (scheduler estimate; may change)",
+      "gpu_validation_passed": false
+    }
+  },
+  "dependencies_added": {
+    "numba": "0.58.1",
+    "llvmlite": "0.41.1",
+    "torch_torchvision_changed": false
+  },
+  "limitations": [
+    "no full training or fit/capacity acceptance",
+    "no official test model evaluation",
+    "AIoU/LDTW implement paper equations in a documented local 256px protocol; official-code parity unverified"
+  ]
+}

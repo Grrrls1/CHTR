@@ -37,6 +37,11 @@ def main():
     if not 0<config['validity_threshold']<1:raise ValueError('invalid validity threshold')
     for k in ('learning_rate','width_weight','valid_weight','grad_clip'):
         if not np.isfinite(config[k]) or config[k]<=0:raise ValueError(k+' must be positive and finite')
+    selection_metric=config.get('selection_metric','free_trajectory_iou')
+    if selection_metric not in ('free_trajectory_iou','casia_metrics.aiou'):
+        raise ValueError('unknown selection metric')
+    if config.get('dataset_backend') == 'casia_pot' and selection_metric != 'casia_metrics.aiou':
+        raise ValueError('CASIA requires validation AIoU selection')
     stopper=EarlyStopping(config.get('early_stopping'))
     cosine_steps=config.get('cosine_steps',991000)
     if type(cosine_steps) is not int or cosine_steps<0:raise ValueError('cosine_steps must be nonnegative')
@@ -60,11 +65,11 @@ def main():
                    else torch.optim.lr_scheduler.LambdaLR(optimizer,lr_lambda=lambda _:1.))
         step=epoch=cursor=last_evaluated_epoch=0;best=None;last_val_loss=None
         if args.resume:
-            ck=torch.load(local_path(args.resume),map_location=device)
+            ck=torch.load(local_path(args.resume),map_location=device,weights_only=False)
             if ck.get('training_mode')!=MODE or ck['signature']!=sig:raise ValueError('resume architecture/data/split/settings differ; use a new run for changed batch/evaluation protocol')
             model.load_state_dict(ck['model']);optimizer.load_state_dict(ck['optimizer']);scheduler.load_state_dict(ck['scheduler'])
             step,epoch,cursor=ck['step'],ck['epoch'],ck['cursor']
-            best=ck['best_val_free_iou'];last_val_loss=ck['best_val_loss'];last_evaluated_epoch=ck['last_evaluated_epoch']
+            best=ck.get('best_selection_score',ck.get('best_val_free_iou'));last_val_loss=ck['best_val_loss'];last_evaluated_epoch=ck['last_evaluated_epoch']
             if ck['visualization_ids']!=fixed_ids:raise ValueError('fixed visualization IDs changed')
             stopper.load_state_dict(ck['early_stopping'])
             torch.set_rng_state(ck['rng']['torch'].cpu());random.setstate(ck['rng']['python']);np.random.set_state(ck['rng']['numpy'])
@@ -82,7 +87,8 @@ def main():
         def save():
             ck=dict(training_mode=MODE,config=config,signature=sig,model=model.state_dict(),
                     optimizer=optimizer.state_dict(),scheduler=scheduler.state_dict(),step=step,epoch=epoch,cursor=cursor,
-                    best_val_free_iou=best,best_val_loss=last_val_loss,last_evaluated_epoch=last_evaluated_epoch,
+                    best_selection_score=best, selection_metric=selection_metric,
+                    best_val_free_iou=best if selection_metric=='free_trajectory_iou' else None,best_val_loss=last_val_loss,last_evaluated_epoch=last_evaluated_epoch,
                     visualization_ids=fixed_ids,rng=dict(torch=torch.get_rng_state(),python=random.getstate(),numpy=np.random.get_state(),
                                               cuda=torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None),
                     early_stopping=stopper.state_dict())
@@ -94,19 +100,21 @@ def main():
             nonlocal best,last_evaluated_epoch,last_val_loss
             target=fresh_evaluation_path(output/f'eval_total_epoch_{epoch:03d}')
             report=evaluate_split(model,val,device,config,target,fixed_ids,val_indices)
-            score=report['free_trajectory_iou'];last_val_loss=report['teacher_forced']['loss']
+            metric = config.get('selection_metric', 'free_trajectory_iou')
+            score = report['casia_metrics']['aiou'] if metric == 'casia_metrics.aiou' else report['free_trajectory_iou']
+            last_val_loss=report['teacher_forced']['loss']
             improved=best is None or score>best
             if improved:best=score
             # Patience counts validation rounds (10 epochs per round in the full config).
             stopper.add(1.-score,1);_,significant,stop=stopper.finish_epoch(epoch)
             last_evaluated_epoch=epoch
-            report.update(epoch=epoch,step=step,selection_metric='free_trajectory_iou',best_val_free_iou=best)
+            report.update(epoch=epoch,step=step,selection_metric=metric,best_selection_score=best,best_val_free_iou=best if selection_metric=='free_trajectory_iou' else None)
             (target/'summary.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
             record=dict(kind='validation',step=step,epoch=epoch,split='val',strokes=report['strokes'],
                         full_split=report['full_split'],teacher_forced=report['teacher_forced'],free=report['free'],
-                        selection_metric='free_trajectory_iou',best_val_free_iou=best,gallery=str(target/'index.html'))
+                        selection_metric=metric,best_selection_score=best,best_val_free_iou=best if selection_metric=='free_trajectory_iou' else None,gallery=str(target/'index.html'))
             log.write(json.dumps(record)+'\n');log.flush();print(json.dumps(record),flush=True)
-            record=dict(kind='early_stopping',step=step,epoch=epoch,monitor='1-free_trajectory_iou',
+            record=dict(kind='early_stopping',step=step,epoch=epoch,monitor='1-'+metric,
                         bad_evaluations=stopper.bad_epochs,improved=significant,stop=stop)
             log.write(json.dumps(record)+'\n');log.flush();print(json.dumps(record),flush=True)
             save()
@@ -114,6 +122,7 @@ def main():
         start=time.monotonic();model.train();order_epoch=None;order=None
         with (output/'metrics.jsonl').open('a') as log:
             while epoch<config['epochs'] and not stopper.should_stop and (not config['max_steps'] or step<config['max_steps']):
+                train.render_epoch = epoch
                 if order_epoch!=epoch:
                     order=torch.randperm(len(indices),generator=torch.Generator().manual_seed(config['seed']+epoch)).tolist()
                     order_epoch=epoch
@@ -139,15 +148,16 @@ def main():
         reason=('early_stopping' if stopper.should_stop else
                 'max_steps' if config['max_steps'] and step>=config['max_steps'] else 'epochs')
         status=dict(step=step,epoch=epoch,cursor=cursor,device=str(device),seconds=time.monotonic()-start,
-                    best_val_free_iou=best,last_val_teacher_forced_loss=last_val_loss,last_evaluated_epoch=last_evaluated_epoch,
+                    best_selection_score=best, selection_metric=selection_metric,
+                    best_val_free_iou=best if selection_metric=='free_trajectory_iou' else None,last_val_teacher_forced_loss=last_val_loss,last_evaluated_epoch=last_evaluated_epoch,
                     parameters=sum(p.numel() for p in model.parameters()),reason=reason,
-                    early_stopping_monitor='1-free_trajectory_iou',early_stopping=stopper.state_dict())
+                    early_stopping_monitor='1-'+selection_metric,early_stopping=stopper.state_dict())
         (output/'training_status.json').write_text(json.dumps(status,indent=2)+'\n')
         print(json.dumps(status),flush=True)
         if config.get('final_test',False) and reason in ('epochs','early_stopping'):
             if not (output/'best.pt').exists():raise ValueError('no validated best checkpoint; final test requires at least one scheduled validation')
             test_output=output/'test_best'
-            ck=torch.load(output/'best.pt',map_location=device)
+            ck=torch.load(output/'best.pt',map_location=device,weights_only=False)
             existing=json.loads((test_output/'summary.json').read_text()) if (test_output/'summary.json').exists() else {}
             if existing.get('checkpoint_step')!=ck['step']:
                 model.load_state_dict(ck['model'])

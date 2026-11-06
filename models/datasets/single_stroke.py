@@ -116,10 +116,15 @@ class SingleStrokeDataset(Dataset):
         if augment and split != 'train':
             raise ValueError('random augmentation is only allowed for train')
         self.catalog, self.split, self.max_points, self.augment = catalog, split, max_points, augment
+        self.render_epoch = None
         self.ids = list(catalog.split[split+'_ids'])
-        self.ends = np.cumsum([catalog.rows[s]['stroke_count'] for s in self.ids]).tolist()
+        counts = getattr(catalog, 'stroke_counts', None)
+        self.ends = np.cumsum([counts[s] if counts is not None else catalog.rows[s]['stroke_count'] for s in self.ids]).tolist()
         if not self.ends or self.ends[-1] == 0:
             raise ValueError('empty stroke dataset')
+        if hasattr(catalog, 'validate_point_cap'):
+            catalog.validate_point_cap(split, max_points)
+            return
         for sid in self.ids:
             for s in catalog.rows[sid]['stroke_map']:
                 length = s['point_range'][1]-s['point_range'][0]
@@ -140,7 +145,8 @@ class SingleStrokeDataset(Dataset):
 
     def __getitem__(self, index):
         sid, k = self.key(index)
-        image, points, offsets, masks = self.catalog.character_assets(sid)
+        image, points, offsets, masks = (self.catalog.render_assets(sid, self.split, self.render_epoch)
+                                          if hasattr(self.catalog, 'render_assets') else self.catalog.character_assets(sid))
         points = points[offsets[k]:offsets[k+1]].copy()
         if not 1 <= len(points) <= self.max_points:
             raise ValueError(sid+': actual points exceed cap; no truncation')

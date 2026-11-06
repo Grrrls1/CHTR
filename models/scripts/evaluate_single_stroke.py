@@ -10,7 +10,7 @@ import numpy as np
 import torch
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 from models.datasets.single_stroke import StrokeCatalog,SingleStrokeDataset
-from models.training.single_stroke import local_path,load_model,signature
+from models.training.single_stroke import local_path,load_model,signature,make_catalog
 from models.training.single_stroke_evaluation import evaluate_split,visualization_ids
 
 
@@ -33,16 +33,18 @@ def evaluate_main():
     p.add_argument('--limit',type=int,default=0,help='0 evaluates the full split; positive values are explicitly partial diagnostics')
     p.add_argument('--visualize-characters',type=int,default=30)
     p.add_argument('--decode-max-points',type=int)
-    p.add_argument('--batch-size',type=int,default=32)
+    p.add_argument('--batch-size',type=int,help='default: 128 for CASIA point evaluation, 32 for calligraphy')
     p.add_argument('--threshold',type=float,default=.5);p.add_argument('--device',default='cpu');p.add_argument('--threads',type=int,default=4)
     args=p.parse_args()
-    if args.limit<0 or args.visualize_characters<0 or args.batch_size<1 or args.output.exists():p.error('invalid limits/batch or output already exists')
+    if args.limit<0 or args.visualize_characters<0 or (args.batch_size is not None and args.batch_size<1) or args.output.exists():p.error('invalid limits/batch or output already exists')
     if args.training_subset and args.split!='train':p.error('training-subset requires --split train')
     torch.set_num_threads(args.threads);device=torch.device(args.device)
     progress('loading_checkpoint',checkpoint=args.checkpoint,device=str(device))
     model,ck=load_model(local_path(args.checkpoint),device);config=ck['config']
+    if args.batch_size is None:
+        args.batch_size=128 if config.get('dataset_backend')=='casia_pot' else 32
     progress('reading_metadata_and_validating_split',epoch=ck['epoch'],step=ck['step'])
-    catalog=StrokeCatalog(local_path(config['dataset']),local_path(config['split_file']))
+    catalog=make_catalog(config)
     try:
         progress('checking_checkpoint_signature')
         if signature(config,catalog)!=ck['signature']:raise ValueError('checkpoint data/split signature mismatch')

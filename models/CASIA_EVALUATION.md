@@ -1,6 +1,6 @@
 # CASIA-OLHWDB 图像到轨迹评估
 
-本入口使用**当前两阶段权重做外部数据集评估**，不训练模型。默认数据为官方
+本入口使用**当前两阶段权重做外部数据集评估**，不训练模型。CASIA独立两阶段训练见 [CASIA_TRAINING](CASIA_TRAINING.md)。默认数据为官方
 CASIA-OLHWDB1.1 **测试集的中文单字轨迹**；输入图由真实轨迹渲染，但推理不读取真实mask、首点、笔画数或轨迹长度。
 
 ## 下载原始在线轨迹
@@ -14,7 +14,7 @@ CASIA-OLHWDB1.1 **测试集的中文单字轨迹**；输入图由真实轨迹渲
 
 脚本使用 `wget --continue` 下载原始POT测试包，保留ZIP和 `.part` 续传文件，完成后核验ZIP CRC，
 解压到 `data/CASIA-OLHWDB/1.1/test/`。重复执行核验并跳过相同的已有文件，拒绝覆盖不同内容。
-`--extract-only` 仅解压已下载ZIP；`--version 1.0` / `1.2` 可选择其他官方测试版本，不下载训练集。
+`--extract-only` 仅解压已下载ZIP；`--version 1.0` / `1.2` 可选择其他官方测试版本，默认不下载训练集；新增 `--split train` 可下载官方原始POT训练包，用法见CASIA_TRAINING。
 
 也可只下载，之后调用脚本解压：
 

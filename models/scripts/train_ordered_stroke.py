@@ -50,6 +50,11 @@ def main():
         if getattr(args, k) is not None:
             config[k] = getattr(args, k)
     validate_config(config)
+    selection_metric=config.get('selection_metric','free.ordered_mask_iou')
+    if selection_metric not in ('free.ordered_mask_iou','casia_metrics.aiou'):
+        raise ValueError('unknown selection metric')
+    if config.get('dataset_backend') == 'casia_pot' and selection_metric != 'casia_metrics.aiou':
+        raise ValueError('CASIA requires validation AIoU selection')
     torch.set_num_threads(config['threads'])
     random.seed(config['seed'])
     np.random.seed(config['seed'])
@@ -83,7 +88,7 @@ def main():
             model.load_state_dict(ck['model'])
             optimizer.load_state_dict(ck['optimizer'])
             step, epoch, cursor = ck['step'], ck['epoch'], ck['cursor']
-            best, last_evaluated_epoch = ck['best_val_ordered_iou'], ck['last_evaluated_epoch']
+            best, last_evaluated_epoch = ck.get('best_selection_score',ck.get('best_val_ordered_iou')), ck['last_evaluated_epoch']
             torch.set_rng_state(ck['rng']['torch'].cpu())
             random.setstate(ck['rng']['python'])
             np.random.set_state(ck['rng']['numpy'])
@@ -102,7 +107,8 @@ def main():
         def save():
             atomic_checkpoint(output/'last.pt', dict(training_mode=MODE, config=config, signature=sig,
                 model=model.state_dict(), optimizer=optimizer.state_dict(), step=step, epoch=epoch, cursor=cursor,
-                best_val_ordered_iou=best, last_evaluated_epoch=last_evaluated_epoch,
+                best_selection_score=best, selection_metric=selection_metric,
+                best_val_ordered_iou=best if selection_metric=='free.ordered_mask_iou' else None, last_evaluated_epoch=last_evaluated_epoch,
                 rng=dict(torch=torch.get_rng_state(), python=random.getstate(), numpy=np.random.get_state(),
                          cuda=torch.cuda.get_rng_state_all() if device.type == 'cuda' else None)))
 
@@ -110,6 +116,7 @@ def main():
         order_epoch, order = None, None
         with (output/'metrics.jsonl').open('a') as log:
             while epoch < config['epochs'] and (not config['max_steps'] or step < config['max_steps']):
+                train.render_epoch = epoch
                 if order_epoch != epoch:
                     order = torch.randperm(len(train_indices), generator=torch.Generator().manual_seed(config['seed']+epoch)).tolist()
                     order_epoch = epoch
@@ -150,13 +157,14 @@ def main():
                     report = evaluate_split(model, val, device, config, target, val_indices,
                                             checkpoint=dict(epoch=epoch, step=step),
                                             point_model=point_model,point_checkpoint=point_ref)
-                    score = report['free']['ordered_mask_iou']
+                    score = (report['casia_metrics']['aiou'] if config.get('selection_metric') == 'casia_metrics.aiou'
+                             else report['free']['ordered_mask_iou'])
                     improved = best is None or score > best
                     if improved:
                         best = score
                     last_evaluated_epoch = epoch
                     record = dict(kind='validation', epoch=epoch, step=step, full_split=report['full_split'],
-                                  free=report['free'],point_layer=report['point_layer'], best_val_ordered_iou=best)
+                                  free=report['free'],point_layer=report['point_layer'], best_val_ordered_iou=best if selection_metric=='free.ordered_mask_iou' else None, selection_metric=config.get('selection_metric','free.ordered_mask_iou'), best_selection_score=best)
                     log.write(json.dumps(record)+'\n')
                     log.flush()
                     save()
@@ -165,7 +173,7 @@ def main():
                 elif step % config['checkpoint_every'] == 0 or cursor == 0:
                     save()
             save()
-        status = dict(step=step, epoch=epoch, cursor=cursor, best_val_ordered_iou=best,
+        status = dict(step=step, epoch=epoch, cursor=cursor, best_selection_score=best, selection_metric=selection_metric, best_val_ordered_iou=best if selection_metric=='free.ordered_mask_iou' else None,
                       last_evaluated_epoch=last_evaluated_epoch, device=str(device),
                       parameters=sum(p.numel() for p in model.parameters()),
                       reason='epochs' if epoch >= config['epochs'] else 'max_steps')

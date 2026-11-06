@@ -134,3 +134,10 @@ gpu-sbatch --user_name lkh models/scripts/train_single_stroke_full.slurm
 这是观察到的文件页面 I/O 等待，未确认底层故障原因，不能归因于 GPU 推理。
 
 后续环境变化时更新对应字段，保留个人电脑配置，不混合两边的 CUDA 结论。
+
+### 2026-11-03 CASIA准备补充
+
+在服务器StrokeExtraction虚拟环境使用已有uv安装 `numba==0.58.1`、`llvmlite==0.41.1`，
+用于精确DTW的CPU加速，未修改torch/torchvision。真实POT两阶段有限步CPU接入和恢复检查通过。
+GPU检查通过 `gpu-sbatch --user_name lkh` 提交job1135；当次记录为Priority排队，尚无该作业的GPU容量或效果结论。
+数据/检查报告见 [CASIA准备报告](reports/casia_training_preparation_20261103.json)。

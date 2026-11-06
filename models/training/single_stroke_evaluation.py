@@ -15,10 +15,12 @@ from models.visualization.trajectory_gallery import write_compact_gallery, write
 
 def visualization_ids(dataset, count=30):
     # Freeze actual image IDs, spread over stroke counts, preferring distinct labels.
-    ordered = sorted(dataset.ids, key=lambda sid: (dataset.catalog.rows[sid]['stroke_count'], sid))
+    counts = getattr(dataset.catalog, 'stroke_counts', None)
+    labels = getattr(dataset.catalog, 'characters', None)
+    ordered = sorted(dataset.ids, key=lambda sid: (counts[sid] if counts is not None else dataset.catalog.rows[sid]['stroke_count'], sid))
     seen = set(); unique = []
     for sid in ordered:
-        label = dataset.catalog.rows[sid]['character']
+        label = labels[sid] if labels is not None else dataset.catalog.rows[sid]['character']
         if label not in seen:
             seen.add(label); unique.append(sid)
     return [unique[int(i)] for i in np.linspace(0, len(unique)-1, min(count, len(unique)), dtype=int)] if count else []
@@ -78,6 +80,8 @@ def evaluate_split(model, dataset, device, config, output, fixed_ids=None, indic
     batch_size = config.get('eval_batch_size', 32)
     cap = config.get('decode_max_points', config['model']['max_points'])
     threshold = config.get('validity_threshold', .5)
+    benchmark = config.get('dataset_backend') == 'casia_pot'
+    benchmark_sums = {}; benchmark_counts = {}
     was_training = model.training
     model.eval()
     try:
@@ -109,6 +113,16 @@ def evaluate_split(model, dataset, device, config, output, fixed_ids=None, indic
                                    resampled_width_bias_px=errors['width_bias_px'],
                                    endpoint_l2_px=float(np.linalg.norm(pred[-1, :2]-gt[-1, :2])),
                                    point_count_mae=abs(len(pred)-len(gt)))
+                    if benchmark:
+                        from models.training.casia_benchmark_metrics import trajectory_metrics
+                        image = np.rint(s['image'][0].numpy()*255).astype(np.uint8)
+                        bm = trajectory_metrics(image, [gt], [pred])
+                        for key in ('aiou', 'dtw_sum_px', 'ldtw_px'):
+                            value = bm[key]
+                            if value is not None:
+                                benchmark_sums[key] = benchmark_sums.get(key, 0.)+value
+                                benchmark_counts[key] = benchmark_counts.get(key, 0)+1
+                        metrics.update({key:bm[key] for key in ('aiou','dtw_sum_px','ldtw_px')})
                     for k, value in metrics.items():free_totals[k] = free_totals.get(k, 0.) + value
                     terminated += int(result['terminated']); truncated += int(result['truncated'])
                     exact_length += int(len(pred) == len(gt)); count += 1
@@ -117,7 +131,7 @@ def evaluate_split(model, dataset, device, config, output, fixed_ids=None, indic
                                stop_reason=result['stop_reason'], first_xyz_exact=bool(np.array_equal(gt[0], pred[0])), **metrics)
                     log.write(json.dumps(row, ensure_ascii=False)+'\n')
                     if s['sample_id'] in selected:
-                        sid = s['sample_id']; folder = output/sid; folder.mkdir(exist_ok=True)
+                        sid = s['sample_id']; folder = output/sid; folder.mkdir(parents=True, exist_ok=True)
                         if sid not in groups:
                             original = dataset.catalog.character_assets(sid)[0]
                             groups[sid] = [original, []]
@@ -142,6 +156,12 @@ def evaluate_split(model, dataset, device, config, output, fixed_ids=None, indic
                        decode_max_points=cap, threshold=threshold, visualization_ids=fixed_ids,
                        visualized_characters=len(cards),
                        metric_notes='IoU uses identical XY/diameter rasterization of GT and prediction. Resampled errors compare equal normalized sequence progress, exclude the given first point, and are not DTW. Stroke metrics are averaged equally; validity recalls use global point counts.')
+        if benchmark:
+            from models.training.casia_benchmark_metrics import PROTOCOL
+            summary['casia_metrics'] = {k:benchmark_sums[k]/benchmark_counts[k] for k in benchmark_sums}
+            summary['casia_metric_protocol'] = PROTOCOL
+            summary['casia_metric_aggregation'] = 'equal stroke mean; GT mask and first XYW provided'
+            summary['render_protocol'] = dataset.catalog.protocol
         (output/'summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n')
         titles = {}
         for sid in fixed_ids:

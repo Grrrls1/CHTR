@@ -1,3 +1,5 @@
+CASIA 两阶段训练数据与入口见 [CASIA_TRAINING](CASIA_TRAINING.md)，已有书法权重的外部评估见 [CASIA_EVALUATION](CASIA_EVALUATION.md)。
+
 # 书法轨迹模型
 
 当前主线是“有序笔画预测 → 单笔轨迹生成”。两层代码和串联推理适配器已实现，分别独立训练。

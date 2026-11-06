@@ -9,11 +9,14 @@ class OrderedStrokeDataset(Dataset):
         if split not in ('train', 'val', 'test') or max_strokes < 1:
             raise ValueError('invalid split or stroke cap')
         self.catalog, self.split, self.max_strokes = catalog, split, max_strokes
+        self.render_epoch = None
         self.ids = list(catalog.split[split + '_ids'])
         if not self.ids:
             raise ValueError('empty character split')
         for sid in self.ids:
-            if not 1 <= catalog.rows[sid]['stroke_count'] <= max_strokes:
+            counts = getattr(catalog, 'stroke_counts', None)
+            n = counts[sid] if counts is not None else catalog.rows[sid]['stroke_count']
+            if not 1 <= n <= max_strokes:
                 raise ValueError(sid + ': stroke count exceeds cap; no truncation')
 
     def __len__(self):
@@ -21,7 +24,8 @@ class OrderedStrokeDataset(Dataset):
 
     def __getitem__(self, index):
         sid = self.ids[index]
-        image, points, offsets, masks = self.catalog.character_assets(sid)
+        image, points, offsets, masks = (self.catalog.render_assets(sid, self.split, self.render_epoch)
+                                          if hasattr(self.catalog, 'render_assets') else self.catalog.character_assets(sid))
         starts = points[offsets[:-1]].copy()
         starts[:, :2] /= 255.
         starts[:, 2] /= 256.

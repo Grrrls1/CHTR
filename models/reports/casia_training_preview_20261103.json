@@ -1,0 +1,42 @@
+[
+  {
+    "sample_id": "train/1020/000171",
+    "character": "墨",
+    "writer": "1020",
+    "widths": [
+      2,
+      8,
+      12
+    ]
+  },
+  {
+    "sample_id": "train/1020/000271",
+    "character": "疟",
+    "writer": "1020",
+    "widths": [
+      2,
+      8,
+      12
+    ]
+  },
+  {
+    "sample_id": "train/1020/000371",
+    "character": "品",
+    "writer": "1020",
+    "widths": [
+      2,
+      8,
+      12
+    ]
+  },
+  {
+    "sample_id": "train/1020/000471",
+    "character": "墙",
+    "writer": "1020",
+    "widths": [
+      2,
+      8,
+      12
+    ]
+  }
+]
