@@ -13,7 +13,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 from models.datasets.single_stroke import collate_single_strokes, SingleStrokeDataset
 from models.losses.single_stroke import single_stroke_loss
 from models.networks.single_stroke import SingleStrokeModel,MODE
-from models.training.single_stroke import local_path,to_device,make_data,signature,validate_continuation
+from models.training.single_stroke import local_path,to_device,make_data,signature,validate_continuation,initialize_finetuning
 from models.training.single_stroke_evaluation import evaluate_split, visualization_ids
 from models.training.early_stopping import EarlyStopping
 
@@ -27,6 +27,8 @@ def main():
     p.add_argument('--max-steps',type=int);p.add_argument('--epochs',type=int)
     args=p.parse_args();config=json.loads(local_path(args.config).read_text())
     if args.resume and args.continue_from:p.error('--resume and --continue-from are mutually exclusive')
+    if args.continue_from and config.get('init_checkpoint'):
+        p.error('--continue-from cannot be combined with fine-tuning init_checkpoint')
     if args.require_evaluated_epoch is not None and (not args.continue_from or args.require_evaluated_epoch<1):
         p.error('--require-evaluated-epoch requires --continue-from and a positive epoch')
     for k in ('output_dir','device','max_steps','epochs'):
@@ -69,6 +71,9 @@ def main():
         scheduler=(torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,T_max=cosine_steps) if cosine_steps
                    else torch.optim.lr_scheduler.LambdaLR(optimizer,lr_lambda=lambda _:1.))
         step=epoch=cursor=last_evaluated_epoch=0;best=None;last_val_loss=None;lineage=None
+        if config.get('init_checkpoint') and not args.resume:
+            lineage=initialize_finetuning(model,config)
+            print(json.dumps(dict(event='fine_tuning_initialization',**lineage)),flush=True)
         if args.resume or args.continue_from:
             source=local_path(args.resume or args.continue_from).resolve()
             if args.continue_from:
@@ -112,6 +117,8 @@ def main():
             del ck
         output.mkdir(parents=True,exist_ok=True)
         (output/'config.json').write_text(json.dumps(config,indent=2)+'\n')
+        if lineage and lineage.get('kind')=='fine_tuning_weights_only':
+            (output/'fine_tuning.json').write_text(json.dumps(lineage,indent=2)+'\n')
         usage=dict(training_mode=MODE,dataset_fingerprint=catalog.fingerprint,signature=sig,
                    train_characters=len({train.key(i)[0] for i in indices}),train_strokes=len(indices),
                    train_keys=[train.key(i) for i in indices],val_keys=[val.key(i) for i in val_indices],

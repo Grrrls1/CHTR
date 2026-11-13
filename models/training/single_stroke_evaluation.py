@@ -80,7 +80,8 @@ def evaluate_split(model, dataset, device, config, output, fixed_ids=None, indic
     batch_size = config.get('eval_batch_size', 32)
     cap = config.get('decode_max_points', config['model']['max_points'])
     threshold = config.get('validity_threshold', .5)
-    benchmark = config.get('dataset_backend') == 'casia_pot'
+    benchmark = (config.get('dataset_backend') == 'casia_pot'
+                 or config.get('selection_metric') == 'casia_metrics.aiou')
     benchmark_sums = {}; benchmark_counts = {}
     was_training = model.training
     model.eval()
@@ -161,7 +162,11 @@ def evaluate_split(model, dataset, device, config, output, fixed_ids=None, indic
             summary['casia_metrics'] = {k:benchmark_sums[k]/benchmark_counts[k] for k in benchmark_sums}
             summary['casia_metric_protocol'] = PROTOCOL
             summary['casia_metric_aggregation'] = 'equal stroke mean; GT mask and first XYW provided'
-            summary['render_protocol'] = dataset.catalog.protocol
+            if hasattr(dataset.catalog, 'protocol'):
+                summary['render_protocol'] = dataset.catalog.protocol
+            else:
+                summary['render_protocol'] = dict(size=256, source='stored calligraphy image and XYW labels',
+                                                  synthetic_width=False)
         (output/'summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n')
         titles = {}
         for sid in fixed_ids:

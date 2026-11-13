@@ -68,13 +68,13 @@ gpu-sbatch --user_name lkh models/scripts/train_casia.slurm ordered_stroke /path
 
 随机宽度配置为 `models/configs/casia_{single_stroke,ordered_stroke}.json`；
 固定宽度对照为 `casia_{single_stroke,ordered_stroke}_fixed_width.json`。
-有序笔画配置中的point_checkpoint是待替换路径，必须指向实际CASIA点层best；
+随机宽度有序笔画配置已于2026-11-06指向job1136的epoch4冻结点层快照；固定宽度对照配置的point_checkpoint仍需替换为对应固定宽度训练的点层best。
 加载时核验CASIA后端、同一数据版本/划分/渲染及点层checkpoint签名，拒绝书法权重。
 所有run使用独立Slurm job目录。根据train/val审核的最大单笔192/116点、最大26/25笔，首版点层上限冻结为256点、笔画层32笔；
 这两个上限依据train/val确定，test仅核验覆盖。超过上限直接报错，不能静默丢弃。
 2026-11-06按用户要求，CASIA点层正式配置（随机/固定宽度两组）使用训练batch256笔、验证及测试batch128笔。
 训练入口的val与可选final test共用 `eval_batch_size=128`；独立 `evaluate_single_stroke.py` 对CASIA checkpoint默认128，
-可用 `--batch-size` 显式覆盖。笔画层的整字batch设置独立保留。
+可用 `--batch-size` 显式覆盖。笔画层的整字batch独立设置为训练32字、验证16字（2026-11-06更新）。
 本次未做容量测试，未重启作业；job1136已有run配置和checkpoint仍记录原batch16。
 已有checkpoint的训练恢复签名包含batch，改为256后不能直接使用原 `--resume`；变更batch使用下面的 `--continue-from` 新run入口。
 
@@ -156,3 +156,19 @@ gpu-sbatch --user_name lkh models/scripts/train_casia.slurm single_stroke \
 原 `--resume` 继续保留同目录且签名完全一致的严格恢复语义。若停机时第5轮已开始，会从最近保存的第5轮cursor继续，而不是重跑第4轮。
 200 epochs仍表示历史累计总轮数，不是额外再训练200轮。训练batch256、val/test128、学习率3e-4。
 本入口按用户要求未运行测试；batch256的GPU容量也尚未验证。本次没有取消或提交任何作业。
+
+## 使用epoch4点层启动CASIA笔画层
+
+2026-11-06确认job1136的best为epoch4/step1,120,224，val AIoU=0.8678405492。
+已复制为独立快照 `models/runs/casia_olhwdb11/frozen_points/job1136_epoch004_step1120224.pt`，
+随机宽度配置 `casia_ordered_stroke.json` 已记录该路径及SHA256，后续原点层run更新best不会改变本次笔画层的冻结点层。
+
+```bash
+cd /home/lkh/workspace/CHTR
+gpu-sbatch --user_name lkh models/scripts/train_casia.slurm ordered_stroke \
+  models/configs/casia_ordered_stroke.json
+```
+
+笔画层训练batch32字、整字val batch16字，每epoch完整val并串联冻结点层，以串联逐字AIoU选best。
+产物位于 `models/runs/casia_olhwdb11/ordered_stroke/job_<ID>/train/`。
+本次只冻结权重并准备配置，未提交训练或运行测试。

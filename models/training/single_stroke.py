@@ -95,6 +95,31 @@ def validate_continuation(checkpoint, config, catalog, required_epoch=None):
     return {key:dict(old=old.get(key),new=config.get(key)) for key in sorted(changed)}
 
 
+def initialize_finetuning(model, config):
+    """Load only compatible model weights; all target-run training state is fresh."""
+    source = local_path(config['init_checkpoint']).resolve()
+    digest = hashlib.sha256()
+    with source.open('rb') as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b''):
+            digest.update(block)
+    digest = digest.hexdigest()
+    expected = config.get('init_checkpoint_sha256')
+    if expected is not None and digest != expected:
+        raise ValueError('fine-tuning parent checkpoint SHA256 mismatch')
+    ck = torch.load(source, map_location='cpu', weights_only=False)
+    if ck.get('training_mode') != MODE:
+        raise ValueError('fine-tuning requires a single-stroke checkpoint')
+    if ck['config']['model'] != config['model']:
+        raise ValueError('fine-tuning model configuration differs from parent; explicit architecture migration required')
+    model.load_state_dict(ck['model'], strict=True)
+    return dict(kind='fine_tuning_weights_only', parent_checkpoint=str(source),
+                parent_sha256=digest, parent_epoch=ck.get('epoch'), parent_step=ck.get('step'),
+                parent_dataset=ck['config'].get('dataset'),
+                parent_dataset_backend=ck['config'].get('dataset_backend', 'calligraphy_lmdb'),
+                parent_signature=ck.get('signature'), optimizer_inherited=False,
+                scheduler_inherited=False, training_progress_inherited=False)
+
+
 def load_model(checkpoint,device):
     # Checkpoints are trusted local files, never remote/untrusted pickle payloads.
     ck=torch.load(checkpoint,map_location=device,weights_only=False)

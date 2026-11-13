@@ -6,7 +6,7 @@
   "seed": 42,
   "device": "cuda:0",
   "threads": 4,
-  "batch_size": 2,
+  "batch_size": 32,
   "epochs": 200,
   "max_steps": 0,
   "train_char_limit": 0,
@@ -16,7 +16,7 @@
   "grad_clip": 1.0,
   "checkpoint_every": 100,
   "eval_every_epochs": 1,
-  "eval_batch_size": 1,
+  "eval_batch_size": 16,
   "decode_max_strokes": 32,
   "validity_threshold": 0.5,
   "visualize_characters": 30,
@@ -40,11 +40,12 @@
     "character_backbone": "swin_t",
     "history_chunk_size": 16
   },
-  "point_checkpoint": "models/runs/casia_olhwdb11/single_stroke/train/best.pt",
+  "point_checkpoint": "models/runs/casia_olhwdb11/frozen_points/job1136_epoch004_step1120224.pt",
   "point_batch_size": 16,
   "point_decode_max_points": 256,
   "point_validity_threshold": 0.5,
   "dataset_backend": "casia_pot",
   "selection_metric": "casia_metrics.aiou",
-  "final_test": false
+  "final_test": false,
+  "point_checkpoint_sha256": "e0cd0b92536b4213073f1886f9553534244bba0d7e83be14d3baad34bbae7043"
 }
