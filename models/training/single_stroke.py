@@ -95,7 +95,7 @@ def validate_continuation(checkpoint, config, catalog, required_epoch=None):
     return {key:dict(old=old.get(key),new=config.get(key)) for key in sorted(changed)}
 
 
-def initialize_finetuning(model, config):
+def initialize_finetuning(model, config, *, training_mode=MODE, capacity_key='max_points'):
     """Load only compatible model weights; all target-run training state is fresh."""
     source = local_path(config['init_checkpoint']).resolve()
     digest = hashlib.sha256()
@@ -107,17 +107,36 @@ def initialize_finetuning(model, config):
     if expected is not None and digest != expected:
         raise ValueError('fine-tuning parent checkpoint SHA256 mismatch')
     ck = torch.load(source, map_location='cpu', weights_only=False)
-    if ck.get('training_mode') != MODE:
-        raise ValueError('fine-tuning requires a single-stroke checkpoint')
-    if ck['config']['model'] != config['model']:
-        raise ValueError('fine-tuning model configuration differs from parent; explicit architecture migration required')
-    model.load_state_dict(ck['model'], strict=True)
+    if ck.get('training_mode') != training_mode:
+        raise ValueError('fine-tuning checkpoint belongs to a different training stage')
+    old_model, new_model = ck['config']['model'], config['model']
+    changed = {key for key in old_model.keys() | new_model.keys()
+               if old_model.get(key) != new_model.get(key)}
+    migration = None
+    state = dict(ck['model'])
+    if changed:
+        if (changed != {capacity_key} or config.get('init_position_resize') != 'copy_prefix'
+                or new_model[capacity_key] <= old_model[capacity_key]):
+            raise ValueError('fine-tuning architecture mismatch; only explicit position expansion is supported')
+        old_position = state['position.weight']
+        position = model.state_dict()['position.weight'].detach().cpu().clone()
+        if old_position.shape != (old_model[capacity_key] + 1, new_model['dim']):
+            raise ValueError('parent position embedding shape disagrees with its configuration')
+        position[:len(old_position)].copy_(old_position)
+        state['position.weight'] = position
+        migration = dict(parameter='position.weight', policy='copy_prefix',
+                         copied_rows=len(old_position), new_rows=len(position)-len(old_position),
+                         new_rows_initialization='target model default initialization',
+                         **{'old_'+capacity_key: old_model[capacity_key],
+                            'new_'+capacity_key: new_model[capacity_key]})
+    model.load_state_dict(state, strict=True)
     return dict(kind='fine_tuning_weights_only', parent_checkpoint=str(source),
                 parent_sha256=digest, parent_epoch=ck.get('epoch'), parent_step=ck.get('step'),
                 parent_dataset=ck['config'].get('dataset'),
                 parent_dataset_backend=ck['config'].get('dataset_backend', 'calligraphy_lmdb'),
                 parent_signature=ck.get('signature'), optimizer_inherited=False,
-                scheduler_inherited=False, training_progress_inherited=False)
+                scheduler_inherited=False, training_progress_inherited=False,
+                position_migration=migration)
 
 
 def load_model(checkpoint,device):

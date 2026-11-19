@@ -16,6 +16,7 @@ from models.losses.ordered_stroke import ordered_stroke_loss
 from models.training.ordered_stroke import (local_path, to_device, make_catalog, make_dataset,
                                             select_indices, signature, atomic_checkpoint, load_point_stage)
 from models.training.ordered_stroke_evaluation import evaluate_split
+from models.training.single_stroke import initialize_finetuning
 
 
 def validate_config(config):
@@ -81,6 +82,10 @@ def main():
         optimizer = torch.optim.AdamW(model.parameters(), lr=config['learning_rate'], weight_decay=config['weight_decay'])
         step = epoch = cursor = last_evaluated_epoch = 0
         best = None
+        lineage = None
+        if config.get('init_checkpoint') and not args.resume:
+            lineage = initialize_finetuning(model, config, training_mode=MODE, capacity_key='max_strokes')
+            print(json.dumps(dict(event='fine_tuning_initialization', **lineage)), flush=True)
         if args.resume:
             ck = torch.load(local_path(args.resume), map_location=device, weights_only=False)
             if ck.get('training_mode') != MODE or ck.get('signature') != sig:
@@ -89,6 +94,7 @@ def main():
             optimizer.load_state_dict(ck['optimizer'])
             step, epoch, cursor = ck['step'], ck['epoch'], ck['cursor']
             best, last_evaluated_epoch = ck.get('best_selection_score',ck.get('best_val_ordered_iou')), ck['last_evaluated_epoch']
+            lineage = ck.get('lineage')
             torch.set_rng_state(ck['rng']['torch'].cpu())
             random.setstate(ck['rng']['python'])
             np.random.set_state(ck['rng']['numpy'])
@@ -96,17 +102,19 @@ def main():
                 torch.cuda.set_rng_state_all([state.cpu() for state in ck['rng']['cuda']])
         output.mkdir(parents=True, exist_ok=True)
         (output/'config.json').write_text(json.dumps(config, indent=2)+'\n')
+        if lineage:
+            (output/'fine_tuning.json').write_text(json.dumps(lineage, indent=2)+'\n')
         usage = dict(training_mode=MODE, dataset_fingerprint=catalog.fingerprint, signature=sig,
                      train_ids=[train.ids[i] for i in train_indices], val_ids=[val.ids[i] for i in val_indices],
                      full_train=len(train_indices) == len(train), full_val=len(val_indices) == len(val),
                      test_used_for_model_selection=False, geometry_condition='start XYW only; no end point',
                      history='BOS + preceding binary masks, causal; K valid targets + one invalid',
-                     point_checkpoint=point_ref,point_model_frozen=True)
+                     point_checkpoint=point_ref,point_model_frozen=True,lineage=lineage)
         (output/'data_usage.json').write_text(json.dumps(usage, ensure_ascii=False, indent=2)+'\n')
 
         def save():
             atomic_checkpoint(output/'last.pt', dict(training_mode=MODE, config=config, signature=sig,
-                model=model.state_dict(), optimizer=optimizer.state_dict(), step=step, epoch=epoch, cursor=cursor,
+                model=model.state_dict(), optimizer=optimizer.state_dict(), step=step, epoch=epoch, cursor=cursor,lineage=lineage,
                 best_selection_score=best, selection_metric=selection_metric,
                 best_val_ordered_iou=best if selection_metric=='free.ordered_mask_iou' else None, last_evaluated_epoch=last_evaluated_epoch,
                 rng=dict(torch=torch.get_rng_state(), python=random.getstate(), numpy=np.random.get_state(),

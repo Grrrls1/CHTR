@@ -73,6 +73,13 @@ def load_point_stage(config, device):
         if config.get('point_checkpoint_sha256', digest) != digest:
             raise ValueError('CASIA frozen point checkpoint changed')
         config['point_checkpoint_sha256'] = digest
+    if config.get('dataset_backend') != 'casia_pot' and config.get('point_checkpoint_sha256'):
+        digest = hashlib.sha256()
+        with local_path(path).open('rb') as stream:
+            for block in iter(lambda: stream.read(1024*1024), b''):
+                digest.update(block)
+        if digest.hexdigest() != config['point_checkpoint_sha256']:
+            raise ValueError('frozen point checkpoint SHA256 mismatch')
     model.eval()
     model.requires_grad_(False)
     config.setdefault('point_decode_max_points',ck['config'].get('decode_max_points',model.max_points))

@@ -94,7 +94,8 @@ def evaluate_split(model, dataset, device, config, output, indices=None, checkpo
                     for key in ('stroke_count_mae', 'count_exact', 'ordered_mask_iou', 'strict_sequence_mask50', 'terminated', 'truncated'):
                         sums[key] = sums.get(key, 0.)+row[key]
                     point_row,pred_paths=compare_trajectories(sample['trajectories_xyw_px'],cascade['strokes'])
-                    if config.get('dataset_backend') == 'casia_pot':
+                    if (config.get('dataset_backend') == 'casia_pot'
+                            or config.get('selection_metric') == 'casia_metrics.aiou'):
                         from models.training.casia_benchmark_metrics import trajectory_metrics
                         image = np.rint(sample['image'][0].numpy()*255).astype(np.uint8)
                         row['casia_metrics'] = trajectory_metrics(image, sample['trajectories_xyw_px'], pred_paths)
@@ -142,7 +143,8 @@ def evaluate_split(model, dataset, device, config, output, indices=None, checkpo
                       point_decode_max_points=config['point_decode_max_points'],
                       point_validity_threshold=config['point_validity_threshold'],
                       test_used_for_model_selection=False)
-        if config.get('dataset_backend') == 'casia_pot':
+        if (config.get('dataset_backend') == 'casia_pot'
+                or config.get('selection_metric') == 'casia_metrics.aiou'):
             from models.training.casia_benchmark_metrics import PROTOCOL
             bm = [r['casia_metrics'] for r in rows]
             report['casia_metrics'] = {}
@@ -151,7 +153,9 @@ def evaluate_split(model, dataset, device, config, output, indices=None, checkpo
                 report['casia_metrics'][key] = float(np.mean(values)) if values else None
             report['casia_metrics']['dtw_undefined_images'] = sum(r['ldtw_px'] is None for r in bm)
             report['casia_metric_protocol'] = PROTOCOL
-            report['render_protocol'] = dataset.catalog.protocol
+            report['render_protocol'] = (dataset.catalog.protocol if hasattr(dataset.catalog, 'protocol')
+                                         else dict(size=256, source='stored calligraphy image and XYW labels',
+                                                   synthetic_width=False))
             report['selection_metric'] = 'casia_metrics.aiou'
         (output/'summary.json').write_text(json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False)+'\n')
         write_evaluation_index(output,report,titles)
