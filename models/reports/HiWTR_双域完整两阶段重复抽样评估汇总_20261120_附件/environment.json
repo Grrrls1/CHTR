@@ -1,0 +1,13 @@
+{
+  "python": "3.10.19",
+  "torch": "2.12.1+cu130",
+  "numpy": "1.23.5",
+  "cuda": "13.0",
+  "gpu": "NVIDIA GeForce RTX 5090",
+  "device_properties": "_CudaDeviceProperties(name='NVIDIA GeForce RTX 5090', major=12, minor=0, total_memory=32109MB, multi_processor_count=170, uuid=00d77fa1-9543-1f6b-32a0-b66e66a9d432, pci_bus_id=184, pci_device_id=0, pci_domain_id=0, L2_cache_size=96MB)",
+  "precision": "FP32",
+  "tf32": false,
+  "character_batch_size": 1,
+  "point_batch_size": 16,
+  "slurm_job_id": "3791"
+}

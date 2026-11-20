@@ -1,0 +1,156 @@
+"""Consolidate existing accepted metrics only; no inference or OrdIoU recomputation."""
+import csv
+import hashlib
+import json
+from pathlib import Path
+from statistics import mean, stdev
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+P=Path('/home/lkh/workspace/CHTR/models/runs/sampled_cross_domain_test/run_20261120_n100')
+I=P/'image_reference_metrics_v1'
+O=P/'consolidated_report_v1'
+
+def read_csv(p):return list(csv.DictReader(p.open()))
+def write_csv(p,rows):
+    keys=list(dict.fromkeys(k for r in rows for k in r))
+    with p.open('w') as f:
+        w=csv.DictWriter(f,fieldnames=keys);w.writeheader();w.writerows(rows)
+def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
+def number(r,k):return float(r[k])
+def fmt(r,k,d=4):return f"{float(r[k+'_mean']):.{d}f} ± {float(r[k+'_sd']):.{d}f}" if r[k+'_mean']!='' else 'undefined'
+
+assert json.loads((P/'delivery_status.json').read_text())['state']=='complete'
+assert json.loads((I/'acceptance.json').read_text())['state']=='passed'
+for parent in [P,I]:
+    for name,h in json.loads((parent/'artifact_manifest.json').read_text()).items():assert sha(parent/name)==h,(parent,name)
+base=read_csv(P/'summary_mean_std.csv');image=read_csv(I/'summary_mean_std.csv')
+by_image={(r['model_id'],r['test_domain']):r for r in image}
+combined=[]
+for r in base:
+    r=dict(r);im=by_image[r['model_id'],r['test_domain']]
+    for k in ['aiou_mean','aiou_sd']:assert abs(float(r[k])-float(im[k]))<1e-12
+    assert abs(float(r['character_trajectory_iou_mean'])-float(im['original_gt_xyw_char_iou_mean']))<1e-12
+    for k,v in im.items():
+        if k.startswith('image_char_iou_') or k.startswith('gt_xyw_image_iou_'):r[k]=v
+    r.update(image_char_iou_reference='input image Otsu foreground',
+             ord_iou_reference='GT XYW raster; original unchanged',
+             original_char_iou_reference='GT XYW raster; retained diagnostic')
+    combined.append(r)
+write_csv(O/'summary_mean_std.csv',combined)
+by_rep={(r['model_id'],r['test_domain'],r['seed']):r for r in read_csv(I/'per_repeat_metrics.csv')}
+repeat=[]
+for r in read_csv(P/'per_repeat_metrics.csv'):
+    r=dict(r);im=by_rep[r['model_id'],r['test_domain'],r['seed']]
+    assert abs(float(r['aiou'])-float(im['aiou']))<1e-12
+    assert abs(float(r['character_trajectory_iou'])-float(im['original_gt_xyw_char_iou']))<1e-12
+    r['image_char_iou']=im['image_char_iou'];r['gt_xyw_image_iou']=im['gt_xyw_image_iou'];repeat.append(r)
+write_csv(O/'per_repeat_metrics.csv',repeat)
+by_pair={(r['test_domain'],r['seed'],r['model_a'],r['model_b']):r for r in read_csv(I/'paired_differences.csv')}
+pairs=[]
+for r in read_csv(P/'paired_differences.csv'):
+    r=dict(r);im=by_pair[r['test_domain'],r['seed'],r['model_a'],r['model_b']]
+    r['image_char_iou']=im['image_char_iou'];pairs.append(r)
+write_csv(O/'paired_differences.csv',pairs)
+by_ps={}
+for r in pairs:by_ps.setdefault((r['test_domain'],r['model_a'],r['model_b']),[]).append(float(r['image_char_iou']))
+paired_summary=read_csv(P/'paired_differences_mean_std.csv')
+for r in paired_summary:
+    vals=by_ps[r['test_domain'],r['model_a'],r['model_b']]
+    r['image_char_iou_mean']=mean(vals);r['image_char_iou_sd']=stdev(vals);r['image_char_iou_defined_repeats']=len(vals)
+write_csv(O/'paired_differences_mean_std.csv',paired_summary)
+assert len(combined)==6 and len(repeat)==30 and len(pairs)==30
+# Ensure consolidation copied OrdIoU exactly, rather than measuring a new definition.
+for old,new in zip(base,combined):
+    for k in old:
+        if k.startswith('ordered_trajectory_iou_'):assert old[k]==new[k]
+for r in combined:
+    vals=[float(x['image_char_iou']) for x in repeat if (x['model_id'],x['test_domain'])==(r['model_id'],r['test_domain'])]
+    assert abs(mean(vals)-float(r['image_char_iou_mean']))<1e-12
+    assert abs(stdev(vals)-float(r['image_char_iou_sd']))<1e-12
+
+refs={
+ 'AIoU':'输入图Otsu前景 vs 预测XY中心线自适应膨胀；忽略预测W',
+ 'ImageCharIoU':'输入图Otsu前景 vs 预测XYW渲染整字并集；保留预测W，不膨胀',
+ 'OrdIoU':'GT XYW逐笔渲染 vs 同序预测XYW渲染；IoU求和除以max(GT笔数,预测笔数)，本轮未重算',
+ 'OriginalCharIoU':'GT XYW整字渲染并集 vs 预测XYW并集；保留旧结果，仅作为标签参照诊断',
+ 'DTW/LDTW':'完整GT/预测XY按笔顺串联的精确欧氏DTW；LDTW为累计代价/最优路径长度',
+ 'aligned_geometry':'按同序配对笔画、等归一化序列进度重采样，包含首点；不覆盖未配对笔画',
+ 'count':'GT笔数标签 vs 预测笔数；missing/extra仅来自数量差，不表示语义匹配',
+}
+(O/'metric_definitions.json').write_text(json.dumps(refs,ensure_ascii=False,indent=2)+'\n')
+label={'M_CASIA':'CASIA原模型','M_BOOK':'纯书法模型','M_TRANSFER':'迁移模型'}
+by={(r['model_id'],r['test_domain']):r for r in combined}
+now=datetime.now(ZoneInfo('Asia/Shanghai')).isoformat()
+lines=['HiWTR 双域完整两阶段 test 子集重复抽样评估：汇总报告与结论',
+ f'汇总时间：{now}',
+ '状态：六组合全部完成，原评估验收通过；2949份唯一模型—字预测；30次重复抽样结果；运行错误0。',
+ '本次只汇总既有数据：采用新增原图参照ImageCharIoU，保留原OrdIoU；没有重新计算OrdIoU或重新推理。','',
+ '每域每次100字，重复5次，seed=20261120..20261124；三模型共享每域同一次清单。',
+ 'CASIA候选test 224559字，五次并集500字；书法候选6714字，五次并集483字。',
+ '均值±样本SD（ddof=1）先按repeat聚合再统计；SD描述抽样波动，不代表训练种子稳定性或独立实验置信区间。',
+ '三对权重在首次test前冻结，两个域共用；不以test选权重；GT不截断；纯图像自由两阶段推理。','',
+ '主要结果（各IoU↑，LDTW与笔数MAE↓）',
+ '模型\t测试域\tAIoU\tImageCharIoU（原图参照）\tOrdIoU（GT轨迹参照，原结果）\tLDTW(px)\t笔数MAE']
+for d in ['CASIA','BOOK']:
+    for mid in ['M_CASIA','M_BOOK','M_TRANSFER']:
+        r=by[mid,d]
+        lines.append('\t'.join([label[mid],d]+[fmt(r,k) for k in ['aiou','image_char_iou','ordered_trajectory_iou','ldtw_px','stroke_count_mae']]))
+lines.extend(['','几何与系统指标（以下为5次均值；全部SD见summary_mean_std.csv）',
+ '模型\t测试域\tXY MAE(px)\t宽度MAE(px)\t终点L2(px)\t笔数正确率\t字符截断率\t点层截断率\t秒/字'])
+for d in ['CASIA','BOOK']:
+    for mid in ['M_CASIA','M_BOOK','M_TRANSFER']:
+        r=by[mid,d]
+        values=[f"{float(r[k+'_mean']):.4f}" for k in ['aligned_xy_mae_px','aligned_width_mae_px','aligned_endpoint_l2_px']]
+        values += [f"{100*float(r[k+'_mean']):.2f}%" for k in ['count_exact','character_truncated','truncated_rate']]
+        values += [f"{float(r['inference_seconds_mean']):.4f}"]
+        lines.append('\t'.join([label[mid],d]+values))
+lines.extend(['','可以支持的结论：',
+ '1. CASIA域：CASIA原模型在本表的五项主要指标上均最佳。迁移模型的三项IoU及LDTW优于纯书法模型，但笔数MAE更高，不能说所有跨域指标均改善。',
+ '2. 书法域：迁移模型的原图ImageCharIoU为0.819577，高于纯书法模型0.784395，差值+3.52个百分点；OrdIoU为0.677781 vs 0.639342，差值+3.84个百分点。',
+ '   这支持“整字图像重建与同序笔画轨迹重合度的均值改善”；OrdIoU并非独立的笔画顺序准确率。',
+ '3. 书法域的轨迹几何没有同步改善：迁移模型LDTW 5.434910高于纯书法模型4.568692；XY、宽度、终点误差均值也更高。',
+ '   因此迁移模型体现的是形状重合度改善与轨迹几何误差之间的取舍，不能概括为全面优于纯书法模型。',
+ '4. CASIA原模型在书法域AIoU最高（0.721171），但ImageCharIoU仅0.599277、OrdIoU仅0.081555，笔数MAE 9.032，字符截断率26%。',
+ '   AIoU忽略预测W并允许自适应膨胀，不能单独代表完整轨迹恢复质量，应联合ImageCharIoU、OrdIoU、数量及几何指标评价。',
+ '5. 迁移模型在CASIA域仍低于CASIA原模型：ImageCharIoU 0.645983 vs 0.694496，OrdIoU 0.176991 vs 0.546137。',
+ '   本结果显示书法域适配与原域性能保留之间存在取舍，但不足以单独认定“灾难性遗忘”。','',
+ '可用于论文的表述：',
+ '在固定权重、纯图像输入的双域重复抽样测试中，迁移模型相比纯书法训练模型取得了更高的书法域原图参照整字IoU和同序笔画轨迹IoU，',
+ '但轨迹几何误差未同步降低，其CASIA域性能也仍低于CASIA原模型。结果体现出域适配收益、轨迹精度与原域性能保留之间的取舍。','',
+ '指标参照与解释边界：'])
+for k,v in refs.items():lines.append(f'{k}：{v}。')
+lines.extend(['ImageCharIoU不再将GT XYW作为图像参照；OrdIoU、DTW及对齐几何仍依赖GT轨迹标签。',
+ '书法域参照是存储的规范化256灰度图；CASIA输入本来由POT按固定协议渲染，并非独立扫描原图。',
+ 'GT XYW重绘与图像的IoU：CASIA 0.901434±0.000957；书法0.846454±0.004279。',
+ '这仅是一致性诊断，混合标签、渲染和二值化差异；不是模型性能上限，也不能直接解释为标注准确率。',
+ 'CASIA的W为每字恒定的合成直径，不代表真实笔压。官方实现等价性声明为false；LPIPS、COCO AP、官方Order Acc.未实现。','',
+ '实验限制与可复核性：',
+ 'M_CASIA原生上限32笔/256点；M_BOOK与M_TRANSFER为64笔/400点。原生容量不同，GT超过上限的样本未剔除。',
+ '三组训练数据、预算、容量及历史val选优规则不同；这是现有系统比较，不能将差值归因于迁移学习本身的独立因果作用。',
+ '未执行配对bootstrap置信区间或显著性检验，不用SD/sqrt(5)冒充独立实验置信区间。',
+ '所有CUDA计算通过Slurm；同一RTX5090、FP32关闭TF32、字batch1、point batch16；计时排除读取、渲染、加载和指标计算。',
+ '计时SD来自样本构成变化，不是重复测速噪声；字符截断分母为整字数，点层截断分母为预测笔画数。',
+ '对齐几何仅评价配对笔画，应同时阅读缺/多笔与笔数指标；空预测保留，IoU为0，空DTW为undefined。','',
+ '交付文件：',
+ 'summary_mean_std.csv：6行，所有原指标+ImageCharIoU的均值/SD，保留旧GT参照CharIoU诊断列。',
+ 'per_repeat_metrics.csv：30行，原样本清单上的每次结果。',
+ 'paired_differences.csv / paired_differences_mean_std.csv：配对差值，方向model_a减model_b。',
+ '../prediction_index.csv / ../predictions/：2949份逐字完整XYW、笔画偏移和停止状态。',
+ '../examples/：两个域、三组同ID的固定样例。',
+ '../config.json / ../frozen_weights/ / ../code_revision.json：冻结协议、权重及代码证据。',
+ 'metric_definitions.json：指标参照；acceptance.json / artifact_manifest.json：汇总核验和来源哈希。'])
+report='\n'.join(lines)+'\n';(O/'REPORT.txt').write_text(report)
+conclusions='\n'.join(lines[lines.index('可以支持的结论：'):lines.index('指标参照与解释边界：')])+'\n'
+(O/'CONCLUSIONS.txt').write_text(conclusions)
+source_files=[P/'summary_mean_std.csv',P/'per_repeat_metrics.csv',P/'paired_differences.csv',P/'paired_differences_mean_std.csv',I/'summary_mean_std.csv',I/'per_repeat_metrics.csv',I/'paired_differences.csv']
+acceptance=dict(state='passed',rows_summary=6,rows_per_repeat=30,paired_rows=30,ord_iou_recomputed=False,
+    ord_iou_copied_exactly=True,inference_rerun=False,source_artifact_hashes_verified=True,
+    sources={str(f.relative_to(P)):sha(f) for f in source_files})
+(O/'acceptance.json').write_text(json.dumps(acceptance,indent=2)+'\n')
+files=['REPORT.txt','CONCLUSIONS.txt','summary_mean_std.csv','per_repeat_metrics.csv','paired_differences.csv','paired_differences_mean_std.csv','metric_definitions.json','acceptance.json','build_report.py.txt']
+(O/'artifact_manifest.json').write_text(json.dumps({n:sha(O/n) for n in files},indent=2)+'\n')
+(P/'LATEST_REPORT.txt').write_text('最新汇总报告：consolidated_report_v1/REPORT.txt\n结论：consolidated_report_v1/CONCLUSIONS.txt\n数据：consolidated_report_v1/summary_mean_std.csv\n采用ImageCharIoU（原图参照）+原OrdIoU（GT轨迹参照）；没有重新测OrdIoU或重新推理。\n')
+(P/'latest_report.json').write_text(json.dumps(dict(state='complete',report='consolidated_report_v1/REPORT.txt',conclusions='consolidated_report_v1/CONCLUSIONS.txt',summary='consolidated_report_v1/summary_mean_std.csv',repeats='consolidated_report_v1/per_repeat_metrics.csv',ord_iou_recomputed=False,inference_rerun=False),indent=2)+'\n')
+print(report)
+print('Consolidation acceptance: PASS')

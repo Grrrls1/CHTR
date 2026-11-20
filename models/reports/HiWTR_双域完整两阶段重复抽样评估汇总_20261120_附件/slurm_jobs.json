@@ -1,0 +1,11 @@
+{
+  "smoke_job_id": 3790,
+  "smoke_submission_time": "2026-11-20T12:57:17+08:00",
+  "slurm_script_sha256": "36ec8ee547672a5400ea035110bac38c173a99b629bf8912f24238d333271508",
+  "evaluation_job_id": 3791,
+  "smoke_state": "complete",
+  "evaluation_submission_time": "2026-11-20T13:00:53+08:00",
+  "finalization_job_id": 3795,
+  "finalization_dependency": "afterok:3791",
+  "finalization_uses_gpu": false
+}

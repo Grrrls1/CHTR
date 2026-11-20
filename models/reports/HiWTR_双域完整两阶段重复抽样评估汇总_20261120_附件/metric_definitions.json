@@ -1,0 +1,9 @@
+{
+  "AIoU": "输入图Otsu前景 vs 预测XY中心线自适应膨胀；忽略预测W",
+  "ImageCharIoU": "输入图Otsu前景 vs 预测XYW渲染整字并集；保留预测W，不膨胀",
+  "OrdIoU": "GT XYW逐笔渲染 vs 同序预测XYW渲染；IoU求和除以max(GT笔数,预测笔数)，本轮未重算",
+  "OriginalCharIoU": "GT XYW整字渲染并集 vs 预测XYW并集；保留旧结果，仅作为标签参照诊断",
+  "DTW/LDTW": "完整GT/预测XY按笔顺串联的精确欧氏DTW；LDTW为累计代价/最优路径长度",
+  "aligned_geometry": "按同序配对笔画、等归一化序列进度重采样，包含首点；不覆盖未配对笔画",
+  "count": "GT笔数标签 vs 预测笔数；missing/extra仅来自数量差，不表示语义匹配"
+}

@@ -1,0 +1,9 @@
+{
+  "state": "passed",
+  "unique_model_character_cases": 2949,
+  "repeat_rows": 30,
+  "mean_std_rows": 6,
+  "source_artifacts_unchanged": true,
+  "original_char_iou_reproduced": 2949,
+  "inference_rerun": false
+}

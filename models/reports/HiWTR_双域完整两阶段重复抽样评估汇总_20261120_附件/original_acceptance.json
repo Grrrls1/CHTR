@@ -1,0 +1,17 @@
+{
+  "state": "passed",
+  "unique_model_character_cases": 2949,
+  "per_repeat_rows": 30,
+  "mean_std_rows": 6,
+  "paired_difference_rows": 30,
+  "independently_verified": [
+    "all cache coverage and XYW integrity",
+    "30 test-only repeat summaries",
+    "6 means and sample SD (ddof=1)",
+    "stroke-weighted geometry errors",
+    "30 per-ID paired differences"
+  ],
+  "failure_log_entries": 0,
+  "evaluation_scope": "test_subset",
+  "full_split": false
+}

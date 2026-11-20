@@ -1,0 +1,30 @@
+{
+  "CASIA": {
+    "test_only": true,
+    "reproducible": true,
+    "within_repeat_unique": true,
+    "shared_by": [
+      "M_CASIA",
+      "M_BOOK",
+      "M_TRANSFER"
+    ],
+    "repeats": 5,
+    "samples_per_repeat": 100,
+    "unique_union": 500,
+    "candidate_count": 224559
+  },
+  "BOOK": {
+    "test_only": true,
+    "reproducible": true,
+    "within_repeat_unique": true,
+    "shared_by": [
+      "M_CASIA",
+      "M_BOOK",
+      "M_TRANSFER"
+    ],
+    "repeats": 5,
+    "samples_per_repeat": 100,
+    "unique_union": 483,
+    "candidate_count": 6714
+  }
+}

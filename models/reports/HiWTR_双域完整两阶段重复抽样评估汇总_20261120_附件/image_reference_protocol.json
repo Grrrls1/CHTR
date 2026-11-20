@@ -1,0 +1,19 @@
+{
+  "name": "image_char_iou_otsu_xyw_local256_v1",
+  "reference": "actual 256x256 model input image; cv2 THRESH_BINARY_INV + THRESH_OTSU",
+  "prediction": "union of predicted XYW strokes rendered with existing raster(); uses predicted W",
+  "adaptive_dilation": false,
+  "alignment": false,
+  "gt_used_for_image_char_iou": false,
+  "empty_prediction_iou": 0,
+  "aggregation": "per character, then repeat mean, then 5-repeat mean/sample SD ddof=1",
+  "book_image": "stored original normalized grayscale",
+  "casia_image": "same fixed POT render as original evaluation",
+  "weights_or_thresholds_changed": false,
+  "inference_rerun": false,
+  "original_config_sha256": "991ce922b5da631064ee0002b94ac36b6f0cb80df1f2cbe3364536b397164e84",
+  "script_sha256": "b6a4b7cee6de431f2986f50a97fda400479994578fdab42fde7f71a8e2c0f1ce",
+  "python": "3.10.19",
+  "numpy": "1.23.5",
+  "opencv": "3.4.18"
+}

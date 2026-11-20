@@ -1,0 +1,19 @@
+{
+  "state": "passed",
+  "rows_summary": 6,
+  "rows_per_repeat": 30,
+  "paired_rows": 30,
+  "ord_iou_recomputed": false,
+  "ord_iou_copied_exactly": true,
+  "inference_rerun": false,
+  "source_artifact_hashes_verified": true,
+  "sources": {
+    "summary_mean_std.csv": "b69258bb7f4e92ea31f41c7b0c0ff025bc588dc7a318dba54a93bf9187d9dc8f",
+    "per_repeat_metrics.csv": "ea47a278f1eb16ca2b9041ca6cec05d03b7d5fb9f319ad8a7aba99a82bcb6d8d",
+    "paired_differences.csv": "bad532f1fb432d93e845623f668f5cdc52f8ff3214906fcdf517b012c33e8cad",
+    "paired_differences_mean_std.csv": "b8f065307d93a8bffcb5ff733133b4da9beb9343b679054685070cadfecf121e",
+    "image_reference_metrics_v1/summary_mean_std.csv": "34d55d3037ffe80f44d7f70856e2194d53a40daff278012de41e9552f1826d28",
+    "image_reference_metrics_v1/per_repeat_metrics.csv": "780c719b00665409c0de37a80c4f055cd6940b186017e45a1ec3f3090f2adab7",
+    "image_reference_metrics_v1/paired_differences.csv": "51ab710d3fd375751bffff27004b5cd8d2e2cc1067747d65737a5ba5d9897bde"
+  }
+}

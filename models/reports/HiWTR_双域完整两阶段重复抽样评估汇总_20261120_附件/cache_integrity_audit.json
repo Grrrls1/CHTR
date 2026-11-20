@@ -1,0 +1,22 @@
+{
+  "complete": true,
+  "counts": {
+    "M_CASIA/CASIA": 500,
+    "M_CASIA/BOOK": 483,
+    "M_BOOK/CASIA": 500,
+    "M_BOOK/BOOK": 483,
+    "M_TRANSFER/CASIA": 500,
+    "M_TRANSFER/BOOK": 483
+  },
+  "total": 2949,
+  "failures": [],
+  "checks": [
+    "ID/manifest membership",
+    "committed cache",
+    "pixel XYW finite and in range",
+    "offsets and stroke states",
+    "truncation counters",
+    "count errors and aligned coverage",
+    "empty DTW handling"
+  ]
+}

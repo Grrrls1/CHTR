@@ -1,0 +1,3 @@
+test_domain,gt_xyw_image_iou_mean,gt_xyw_image_iou_sd,gt_xyw_image_iou_defined_repeats
+CASIA,0.9014344676218989,0.0009566700502884756,5
+BOOK,0.8464541610799593,0.004278634821787029,5

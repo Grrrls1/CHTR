@@ -1,0 +1,156 @@
+"""CPU-only image-reference CharIoU from committed XYW predictions; no inference."""
+import argparse
+import csv
+import hashlib
+import json
+from pathlib import Path
+import platform
+import sys
+import traceback
+import cv2
+import numpy as np
+
+ROOT=Path('/home/lkh/workspace/CHTR');sys.path.insert(0,str(ROOT))
+from models.scripts import evaluate_cross_domain_sampled as e
+from models.training.single_stroke_evaluation import raster,iou
+
+P=ROOT/'models/runs/sampled_cross_domain_test/run_20261120_n100'
+OUT=P/'image_reference_metrics_v1'
+PROTOCOL=dict(name='image_char_iou_otsu_xyw_local256_v1',
+ reference='actual 256x256 model input image; cv2 THRESH_BINARY_INV + THRESH_OTSU',
+ prediction='union of predicted XYW strokes rendered with existing raster(); uses predicted W',
+ adaptive_dilation=False,alignment=False,gt_used_for_image_char_iou=False,
+ empty_prediction_iou=0,aggregation='per character, then repeat mean, then 5-repeat mean/sample SD ddof=1',
+ book_image='stored original normalized grayscale',casia_image='same fixed POT render as original evaluation',
+ weights_or_thresholds_changed=False,inference_rerun=False)
+
+
+def foreground(image):
+    if image.dtype!=np.uint8 or image.shape!=(256,256):raise ValueError('expected uint8 256 grayscale')
+    return cv2.threshold(image,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)[1].astype(bool)
+
+
+def union(paths):
+    return np.logical_or.reduce([raster(p) for p in paths]) if paths else np.zeros((256,256),bool)
+
+
+def image_char_iou(image,paths):
+    return iou(foreground(image),union(paths))
+
+
+def tests():
+    path=np.array([[60,60,8],[100,60,8]],np.float32)
+    image=np.where(raster(path),0,255).astype(np.uint8)
+    assert image_char_iou(image,[path])==1
+    assert image_char_iou(image,[])==0
+    wider=path.copy();wider[:,2]=24
+    assert image_char_iou(image,[wider])<1
+    shifted=path.copy();shifted[:,0]+=100
+    assert image_char_iou(image,[shifted])==0
+    expected=cv2.threshold(image,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)[1]>0
+    assert np.array_equal(foreground(image),expected)
+    # Input reference is independent of any GT trajectory argument (none is accepted).
+    print('5 CPU metric fixtures: PASS',flush=True)
+
+
+def run():
+    cv2.setNumThreads(4)
+    tests();cfg=e.validate_frozen(P);cfg['_output']=str(P)
+    e.write_json(OUT/'protocol.json',dict(**PROTOCOL,original_config_sha256=e.sha256_file(P/'config.json'),
+       script_sha256=e.sha256_file(Path(__file__)),python=platform.python_version(),numpy=np.__version__,opencv=cv2.__version__))
+    cache=OUT/'per_character_cache';rows={};diagnostic={};completed={}
+    for domain,d in cfg['domains'].items():
+        catalog=e.make_catalog(d['config'])
+        try:
+            assert catalog.fingerprint==d['fingerprint']
+            for mid in cfg['weights']:rows[mid,domain]={}
+            diagnostic[domain]={}
+            for cursor,sid in enumerate(d['union_ids']):
+                image,points,offsets,_=catalog.character_assets(sid)
+                actual_fg=foreground(image)
+                gt=[points[a:b] for a,b in zip(offsets[:-1],offsets[1:])]
+                gt_mask=union(gt)
+                diagnostic[domain][sid]=dict(sample_id=sid,gt_xyw_image_iou=iou(actual_fg,gt_mask))
+                for mid in cfg['weights']:
+                    source=P/'predictions'/mid/domain/(e.digest(sid)+'.json')
+                    r=e.read_json(source);assert e.valid_cache(r,e.identity(cfg,mid,domain),sid)
+                    pred=r['prediction'];xyw=np.asarray(pred['points_xyw_px'],np.float32).reshape(-1,3)
+                    off=np.asarray(pred['stroke_offsets'],np.int64)
+                    assert off[0]==0 and off[-1]==len(xyw) and len(off)-1==r['metrics']['predicted_strokes']
+                    paths=[xyw[a:b] for a,b in zip(off[:-1],off[1:])]
+                    pm=union(paths);old=iou(gt_mask,pm)
+                    assert abs(old-r['metrics']['character_trajectory_iou'])<1e-12,'cached XYW differs from original CharIoU'
+                    row=dict(model_id=mid,test_domain=domain,sample_id=sid,image_char_iou=iou(actual_fg,pm),
+                       original_gt_xyw_char_iou=old,aiou=r['metrics']['aiou'],
+                       gt_xyw_image_iou=diagnostic[domain][sid]['gt_xyw_image_iou'],
+                       source_prediction_sha256=e.sha256_file(source),input_image_sha256=hashlib.sha256(image.tobytes()).hexdigest())
+                    rows[mid,domain][sid]=row
+                    e.write_json(cache/mid/domain/(e.digest(sid)+'.json'),row)
+                if cursor%50==0:print(domain,f'{cursor+1}/{len(d["union_ids"])}',flush=True)
+            for mid in cfg['weights']:
+                e.write_csv(OUT/'per_character'/f'{mid}_{domain}.csv',list(rows[mid,domain].values()))
+            completed[domain]=len(d['union_ids'])
+            e.write_json(OUT/'status.json',dict(state='running',completed_domains=completed,inference_rerun=False))
+        finally:catalog.close()
+    repeat_rows=[];summary_rows=[];gt_summaries=[]
+    for domain,d in cfg['domains'].items():
+        for mid in cfg['weights']:
+            rs=[]
+            for seed in cfg['sampling_seeds']:
+                ids=e.read_json(P/'manifests'/domain/f'seed_{seed}.json')['ids']
+                result={k:float(np.mean([rows[mid,domain][s][k] for s in ids])) for k in ['image_char_iou','original_gt_xyw_char_iou','aiou','gt_xyw_image_iou']}
+                rs.append(result)
+                repeat_rows.append(dict(model_id=mid,test_domain=domain,seed=seed,characters=len(ids),full_split=False,evaluation_scope='test_subset',**result))
+            summary_rows.append(dict(model_id=mid,test_domain=domain,**e.mean_std(rs)))
+        rs=[]
+        for seed in cfg['sampling_seeds']:
+            ids=e.read_json(P/'manifests'/domain/f'seed_{seed}.json')['ids']
+            rs.append(dict(gt_xyw_image_iou=float(np.mean([diagnostic[domain][s]['gt_xyw_image_iou'] for s in ids]))))
+        gt_summaries.append(dict(test_domain=domain,**e.mean_std(rs)))
+    e.write_csv(OUT/'per_repeat_metrics.csv',repeat_rows)
+    e.write_csv(OUT/'summary_mean_std.csv',summary_rows)
+    e.write_csv(OUT/'gt_image_consistency.csv',gt_summaries)
+    pairs=[]
+    mids=list(cfg['weights'])
+    for domain in cfg['domains']:
+        for seed in cfg['sampling_seeds']:
+            ids=e.read_json(P/'manifests'/domain/f'seed_{seed}.json')['ids']
+            for i,a in enumerate(mids):
+                for b in mids[i+1:]:
+                    pairs.append(dict(test_domain=domain,seed=seed,model_a=a,model_b=b,difference='a_minus_b',characters=len(ids),
+                        image_char_iou=float(np.mean([rows[a,domain][s]['image_char_iou']-rows[b,domain][s]['image_char_iou'] for s in ids]))))
+    e.write_csv(OUT/'paired_differences.csv',pairs)
+    assert len(summary_rows)==6 and len(repeat_rows)==30 and sum(len(v) for v in rows.values())==2949
+    # Independent recomputation of repeat means and sample SD from the exported rows.
+    from statistics import mean,stdev
+    for r in summary_rows:
+        vals=[x['image_char_iou'] for x in repeat_rows if x['model_id']==r['model_id'] and x['test_domain']==r['test_domain']]
+        assert abs(mean(vals)-r['image_char_iou_mean'])<1e-12 and abs(stdev(vals)-r['image_char_iou_sd'])<1e-12
+    lines=['HiWTR 原图参照 ImageCharIoU 离线重算','',
+      '无需重新推理：复用原2949份逐字XYW预测、冻结权重和全部10份100字×5次test清单。',
+      '原图Otsu前景 vs 预测XYW按预测W渲染的整字mask；不做自适应膨胀、对齐或阈值调参。',
+      '保留原GT轨迹参照CharIoU，新增指标名ImageCharIoU，协议image_char_iou_otsu_xyw_local256_v1。',
+      '书法使用存储灰度原图；CASIA使用同一既有POT固定渲染输入，并非独立扫描图。','',
+      '模型\t目标域\tImageCharIoU均值±SD\t原CharIoU均值±SD']
+    for r in summary_rows:
+        lines.append(f"{r['model_id']}\t{r['test_domain']}\t{r['image_char_iou_mean']:.6f} ± {r['image_char_iou_sd']:.6f}\t{r['original_gt_xyw_char_iou_mean']:.6f} ± {r['original_gt_xyw_char_iou_sd']:.6f}")
+    lines.extend(['','GT XYW重绘与输入图的一致性诊断（不是模型性能上限）：'])
+    for r in gt_summaries:lines.append(f"{r['test_domain']}：{r['gt_xyw_image_iou_mean']:.6f} ± {r['gt_xyw_image_iou_sd']:.6f}")
+    lines.extend(['','逐字指标和来源哈希：per_character/、per_character_cache/。',
+       '30次结果：per_repeat_metrics.csv；6组均值/SD：summary_mean_std.csv；配对差值：paired_differences.csv。',
+       '原CharIoU已用缓存XYW逐字重算校验，2949个样本全部一致；原预测和原报告未修改。',
+       '本指标不依赖GT轨迹标签，但仍受图像二值化、预测宽度和栅格化方式影响。',
+       '它与AIoU共用图像前景参照；AIoU忽略预测W并自适应膨胀，本指标保留预测W。',
+       '全部结果为test子集重复抽样统计；SD为样本SD(ddof=1)，描述抽样波动。'])
+    (OUT/'REPORT.txt').write_text('\n'.join(lines)+'\n')
+    e.write_json(OUT/'status.json',dict(state='complete',model_character_cases=2949,combinations=6,repeat_rows=30,
+        inference_rerun=False,original_char_iou_reproduction='2949/2949 matched',metric_protocol=PROTOCOL))
+    print('\n'.join(lines),flush=True)
+
+if __name__=='__main__':
+    parser=argparse.ArgumentParser();parser.add_argument('--test-only',action='store_true');args=parser.parse_args()
+    if args.test_only:tests()
+    else:
+        try:run()
+        except Exception:
+            e.write_json(OUT/'status.json',dict(state='failed',error=traceback.format_exc(),inference_rerun=False));raise
