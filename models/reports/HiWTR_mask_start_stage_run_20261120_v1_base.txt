@@ -1,0 +1,89 @@
+HiWTR E1 mask/首点与E2阶段交叉评估（base）
+
+状态：本文件只包含已逐字验收的条件；条件定义见condition_manifest.csv。
+本阶段条件/域合并数：18；执行manifest行数：36。
+所有权重冻结；不训练；E1首点始终为完整XYW，模型原样保留。
+E1匹配单笔、全部GT单笔参照和混合oracle整字分别列出；不把GT条件当作部署成绩。
+E1的ordered_mask_iou等笔画层字段始终描述固定原始上游，不代表替换后的条件mask质量。
+E2全部为预测mask/首点的纯图像串联。计时为共享第一阶段与点层同步组件之和，不是重复连续测速。
+噪声尺度仅由固定BOOK val100校准；N10/N01/N11共享分量与强度z；跨mask不重新抽样。
+恢复曲线包含显式零弧长退化处理；必须同时查看GT误差、长度、点数与停止，不能仅用R<1认定纠错。
+
+E2主要指标（test为5份100字清单均值±样本SD；val仅固定100字）
+split / condition / ImageCharIoU / OrdIoU / LDTW / countMAE
+val / E2_BOOK_BOOK_BOOK / 0.7905069620223523 / 0.6453113163078649 / 4.63042773436028 / 0.43
+val / E2_BOOK_BOOK_TRANSFER / 0.8033011584111075 / 0.6668189401975521 / 7.094320516771176 / 0.43
+val / E2_BOOK_TRANSFER_BOOK / 0.8057695918086875 / 0.6607260622358663 / 3.9131104264070498 / 0.45
+val / E2_BOOK_TRANSFER_TRANSFER / 0.817235501124771 / 0.6825172503527942 / 5.823741156515869 / 0.45
+val / E2_CASIA_BOOK_BOOK / 0.5343022443396717 / 0.13605990484140273 / 18.7400343873354 / 2.83
+val / E2_CASIA_BOOK_TRANSFER / 0.552590064242171 / 0.13659820508504003 / 17.906198873694965 / 2.83
+val / E2_CASIA_TRANSFER_BOOK / 0.6078338442560489 / 0.17004310857372676 / 16.62349087473185 / 3.02
+val / E2_CASIA_TRANSFER_TRANSFER / 0.6324209330167153 / 0.17445355405279034 / 15.292746910147637 / 3.02
+test / E2_BOOK_BOOK_BOOK / 0.784395 ± 0.007985 / 0.639342 ± 0.025188 / 4.568692 ± 0.248322 / 0.522000 ± 0.092844
+test / E2_BOOK_BOOK_TRANSFER / 0.807935 ± 0.010351 / 0.664949 ± 0.027707 / 6.104853 ± 0.521420 / 0.522000 ± 0.092844
+test / E2_BOOK_TRANSFER_BOOK / 0.794655 ± 0.010510 / 0.649214 ± 0.030370 / 4.015030 ± 0.252339 / 0.472000 ± 0.079498
+test / E2_BOOK_TRANSFER_TRANSFER / 0.819577 ± 0.014823 / 0.677781 ± 0.032323 / 5.434910 ± 0.554805 / 0.472000 ± 0.079498
+test / E2_CASIA_BOOK_BOOK / 0.536176 ± 0.012108 / 0.143317 ± 0.014099 / 17.726262 ± 0.416695 / 2.886000 ± 0.339234
+test / E2_CASIA_BOOK_TRANSFER / 0.557997 ± 0.010197 / 0.146919 ± 0.013919 / 16.953644 ± 0.451553 / 2.886000 ± 0.339234
+test / E2_CASIA_TRANSFER_BOOK / 0.627242 ± 0.011028 / 0.173353 ± 0.013753 / 15.162148 ± 0.441747 / 3.126000 ± 0.421224
+test / E2_CASIA_TRANSFER_TRANSFER / 0.645983 ± 0.003912 / 0.176991 ± 0.015274 / 14.703885 ± 0.323185 / 3.126000 ± 0.421224
+
+E1现实条件主要指标：split / condition / matched_instances(mean) / singleIoU / postXY / wholeImageCharIoU
+val / E1_BOOK_GT_N00 / 896.0 / 0.863825468844088 / 1.579823151090745 / 0.8047886719518772
+val / E1_BOOK_GT_PRED / 896.0 / 0.8269251866863233 / 2.3889650658777195 / 0.7995950905220126
+val / E1_BOOK_PRED_N00 / 896.0 / 0.8171689601617667 / 3.0404950053310627 / 0.8062267854345505
+val / E1_BOOK_PRED_PRED / 896.0 / 0.7906323153783414 / 3.817930764448262 / 0.8057695918086875
+val / E1_TRANSFER_GT_N00 / 896.0 / 0.9013322418043491 / 3.2261167670253696 / 0.8142948409425838
+val / E1_TRANSFER_GT_PRED / 896.0 / 0.8576454322695523 / 4.364325892028837 / 0.8058109490601493
+val / E1_TRANSFER_PRED_N00 / 896.0 / 0.8415787676794602 / 5.1687578482990535 / 0.8103815450447986
+val / E1_TRANSFER_PRED_PRED / 896.0 / 0.8174747645106736 / 5.866282739385541 / 0.817235501124771
+test / E1_BOOK_GT_N00 / 934.8 / 0.8629118773540968 / 1.6542118012105984 / 0.7976736680871707
+test / E1_BOOK_GT_PRED / 934.8 / 0.8230317031386045 / 2.514957568618858 / 0.7894475339956956
+test / E1_BOOK_PRED_N00 / 934.8 / 0.8069549102874243 / 3.173233399369382 / 0.792929349296552
+test / E1_BOOK_PRED_PRED / 934.8 / 0.781602547788098 / 3.97648067160114 / 0.7946545348508371
+test / E1_TRANSFER_GT_N00 / 934.8 / 0.9075927302207394 / 2.8873481511648236 / 0.8246190040755492
+test / E1_TRANSFER_GT_PRED / 934.8 / 0.8573877622005595 / 4.124718714673564 / 0.8104009618607236
+test / E1_TRANSFER_PRED_N00 / 934.8 / 0.835706661291775 / 4.866828171126131 / 0.8109661285290002
+test / E1_TRANSFER_PRED_PRED / 934.8 / 0.8176624981273424 / 5.672997073291475 / 0.8195771135649563
+
+E1后续误差的配对影响（在每个repeat内同字配对；正负方向见指标定义）：
+BOOK / mask_at_GT_start / single_trajectory_iou: -0.055957; defined repeats=5
+BOOK / mask_at_GT_start / single_post_start_aligned_xy_mae_px: +1.519022; defined repeats=5
+BOOK / mask_at_GT_start / single_post_start_aligned_width_mae_px: +1.151265; defined repeats=5
+BOOK / mask_at_PRED_start / single_trajectory_iou: -0.041429; defined repeats=5
+BOOK / mask_at_PRED_start / single_post_start_aligned_xy_mae_px: +1.461523; defined repeats=5
+BOOK / mask_at_PRED_start / single_post_start_aligned_width_mae_px: +1.034938; defined repeats=5
+BOOK / start_at_GT_mask / single_trajectory_iou: -0.039880; defined repeats=5
+BOOK / start_at_GT_mask / single_post_start_aligned_xy_mae_px: +0.860746; defined repeats=5
+BOOK / start_at_GT_mask / single_post_start_aligned_width_mae_px: +0.325856; defined repeats=5
+BOOK / start_at_PRED_mask / single_trajectory_iou: -0.025352; defined repeats=5
+BOOK / start_at_PRED_mask / single_post_start_aligned_xy_mae_px: +0.803247; defined repeats=5
+BOOK / start_at_PRED_mask / single_post_start_aligned_width_mae_px: +0.209529; defined repeats=5
+BOOK / interaction / single_trajectory_iou: +0.014528; defined repeats=5
+BOOK / interaction / single_post_start_aligned_xy_mae_px: -0.057498; defined repeats=5
+BOOK / interaction / single_post_start_aligned_width_mae_px: -0.116327; defined repeats=5
+TRANSFER / mask_at_GT_start / single_trajectory_iou: -0.071886; defined repeats=5
+TRANSFER / mask_at_GT_start / single_post_start_aligned_xy_mae_px: +1.979480; defined repeats=5
+TRANSFER / mask_at_GT_start / single_post_start_aligned_width_mae_px: +1.170584; defined repeats=5
+TRANSFER / mask_at_PRED_start / single_trajectory_iou: -0.039725; defined repeats=5
+TRANSFER / mask_at_PRED_start / single_post_start_aligned_xy_mae_px: +1.548278; defined repeats=5
+TRANSFER / mask_at_PRED_start / single_post_start_aligned_width_mae_px: +0.858682; defined repeats=5
+TRANSFER / start_at_GT_mask / single_trajectory_iou: -0.050205; defined repeats=5
+TRANSFER / start_at_GT_mask / single_post_start_aligned_xy_mae_px: +1.237371; defined repeats=5
+TRANSFER / start_at_GT_mask / single_post_start_aligned_width_mae_px: +0.507204; defined repeats=5
+TRANSFER / start_at_PRED_mask / single_trajectory_iou: -0.018044; defined repeats=5
+TRANSFER / start_at_PRED_mask / single_post_start_aligned_xy_mae_px: +0.806169; defined repeats=5
+TRANSFER / start_at_PRED_mask / single_post_start_aligned_width_mae_px: +0.195302; defined repeats=5
+TRANSFER / interaction / single_trajectory_iou: +0.032161; defined repeats=5
+TRANSFER / interaction / single_post_start_aligned_xy_mae_px: -0.431202; defined repeats=5
+TRANSFER / interaction / single_post_start_aligned_width_mae_px: -0.311902; defined repeats=5
+
+噪声恢复摘要：R小于1只表示相对同mask N00的影响衰减；须同时阅读GT误差和退化/长度/停止。
+
+详细表：mean_std.csv、per_repeat.csv、per_execution_unit.csv、paired_effects.csv。
+请求/实际噪声及裁剪：noise_requested_actual.csv；恢复曲线数值：response_unique_ids.csv；图：figures/。
+原生上限均64笔/400点，FP32、point batch16、阈值.5；不截断GT。
+各repeat可能重叠，draw是输入扰动重复而非训练种子；不将重复ID/draw当作独立字符。
+阶段交叉用于定位现有系统收益，历史预算/选优不同，不是严格预训练因果收益。
+
+原始输出：/home/lkh/workspace/CHTR/models/runs/start_noise_stage_cross/run_20261120_v1

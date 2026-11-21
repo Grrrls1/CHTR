@@ -1,0 +1,173 @@
+{
+  "method": "Actual current modules instantiated on meta device using frozen evaluation checkpoint model configs; sum unique parameters per stage; both independent encoders counted; excludes buffers and optimizer states",
+  "results": [
+    {
+      "weight_group": "M_CASIA",
+      "stages": {
+        "stroke": {
+          "model_config": {
+            "dim": 64,
+            "heads": 4,
+            "encoder_layers": 2,
+            "decoder_layers": 9,
+            "max_strokes": 32,
+            "dropout": 0.0,
+            "character_backbone": "swin_t",
+            "history_chunk_size": 16
+          },
+          "total_parameters": 39852610,
+          "trainable_parameters_at_construction": 39852610,
+          "by_module": {
+            "visual": 27854970,
+            "history_encoder": 11389888,
+            "position": 2112,
+            "layers": 600768,
+            "norm": 128,
+            "mask_head": 4160,
+            "box_head": 260,
+            "start_xy_head": 130,
+            "start_width_head": 65,
+            "valid_head": 65
+          },
+          "checkpoint_sha256": "c4402823a5eeade177bbad478b24c97555f15934b1deb1d15324d6b99d8fc721"
+        },
+        "point": {
+          "model_config": {
+            "dim": 64,
+            "heads": 4,
+            "encoder_layers": 2,
+            "decoder_layers": 4,
+            "max_points": 256,
+            "dropout": 0.0
+          },
+          "total_parameters": 11969284,
+          "trainable_parameters_at_construction": 11969284,
+          "by_module": {
+            "visual": 11479744,
+            "point_embedding": 4416,
+            "position": 16448,
+            "layers": 468224,
+            "norm": 128,
+            "xy_head": 130,
+            "width_head": 65,
+            "valid_head": 65
+          },
+          "checkpoint_sha256": "e0cd0b92536b4213073f1886f9553534244bba0d7e83be14d3baad34bbae7043"
+        }
+      },
+      "total_parameters": 51821894
+    },
+    {
+      "weight_group": "M_BOOK",
+      "stages": {
+        "stroke": {
+          "model_config": {
+            "dim": 64,
+            "heads": 4,
+            "encoder_layers": 2,
+            "decoder_layers": 9,
+            "max_strokes": 64,
+            "dropout": 0.0,
+            "character_backbone": "swin_t",
+            "history_chunk_size": 16
+          },
+          "total_parameters": 39854658,
+          "trainable_parameters_at_construction": 39854658,
+          "by_module": {
+            "visual": 27854970,
+            "history_encoder": 11389888,
+            "position": 4160,
+            "layers": 600768,
+            "norm": 128,
+            "mask_head": 4160,
+            "box_head": 260,
+            "start_xy_head": 130,
+            "start_width_head": 65,
+            "valid_head": 65
+          },
+          "checkpoint_sha256": "4f2457ff35004dd939d35f8bd9c4eb444426494c158c7f64217cf5d4da7d4184"
+        },
+        "point": {
+          "model_config": {
+            "dim": 64,
+            "heads": 4,
+            "encoder_layers": 2,
+            "decoder_layers": 4,
+            "max_points": 400,
+            "dropout": 0.0
+          },
+          "total_parameters": 11978500,
+          "trainable_parameters_at_construction": 11978500,
+          "by_module": {
+            "visual": 11479744,
+            "point_embedding": 4416,
+            "position": 25664,
+            "layers": 468224,
+            "norm": 128,
+            "xy_head": 130,
+            "width_head": 65,
+            "valid_head": 65
+          },
+          "checkpoint_sha256": "1ad68738196fc2f0f4cb595b795c9a7d7f9ddc7e01dfc6243f9f14f1ba944efd"
+        }
+      },
+      "total_parameters": 51833158
+    },
+    {
+      "weight_group": "M_TRANSFER",
+      "stages": {
+        "stroke": {
+          "model_config": {
+            "dim": 64,
+            "heads": 4,
+            "encoder_layers": 2,
+            "decoder_layers": 9,
+            "max_strokes": 64,
+            "dropout": 0.0,
+            "character_backbone": "swin_t",
+            "history_chunk_size": 16
+          },
+          "total_parameters": 39854658,
+          "trainable_parameters_at_construction": 39854658,
+          "by_module": {
+            "visual": 27854970,
+            "history_encoder": 11389888,
+            "position": 4160,
+            "layers": 600768,
+            "norm": 128,
+            "mask_head": 4160,
+            "box_head": 260,
+            "start_xy_head": 130,
+            "start_width_head": 65,
+            "valid_head": 65
+          },
+          "checkpoint_sha256": "e8b4a60fcd40411b0c2455eba472187254a27a0c3c9dfec757fdf8e9353ee0ed"
+        },
+        "point": {
+          "model_config": {
+            "dim": 64,
+            "heads": 4,
+            "encoder_layers": 2,
+            "decoder_layers": 4,
+            "max_points": 400,
+            "dropout": 0.0
+          },
+          "total_parameters": 11978500,
+          "trainable_parameters_at_construction": 11978500,
+          "by_module": {
+            "visual": 11479744,
+            "point_embedding": 4416,
+            "position": 25664,
+            "layers": 468224,
+            "norm": 128,
+            "xy_head": 130,
+            "width_head": 65,
+            "valid_head": 65
+          },
+          "checkpoint_sha256": "a95ae7b889a46f185f3de795be87059e8352665ef4ddfd8315776529592633d7"
+        }
+      },
+      "total_parameters": 51833158
+    }
+  ]
+}
